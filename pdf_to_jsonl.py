@@ -1,23 +1,33 @@
 #!/usr/bin/env python3
-"""Convert a folder tree of DAB/ALJ decision PDFs into one JSONL per corpus.
+"""Convert a folder of DAB/ALJ decisions into one JSONL per corpus.
 
     python pdf_to_jsonl.py ./dab_pdfs -o dab.jsonl
     python pdf_to_jsonl.py ./dab_pdfs -o dab.jsonl --ocr   # needs tesseract
 
-One JSON object per line, one line per PDF. Categorisation is not done here --
-that is slice_jsonl.py's job, driven by categories.py. Emitting a (b)(7) slice
-from inside the extractor meant one category was privileged over the fifteen
-others and its label was computed by different code than theirs.
+Both file types are read, because HHS publishes both: decisions to about 1999
+are HTML, later ones are PDF, and from 2017 each decision is a web page again.
+A PDF-only extractor silently skips two thirds of the collection window.
+
+One JSON object per line, one line per decision. Categorisation is not done
+here -- that is slice_jsonl.py's job, driven by categories.py. Emitting a (b)(7)
+slice from inside the extractor meant one category was privileged over the
+fifteen others and its label was computed by different code than theirs.
 """
 from __future__ import annotations
 
 import argparse
+import html as html_mod
 import json
 import re
 import sys
 from pathlib import Path
 
 from pypdf import PdfReader
+
+import clean
+
+HTML_SUFFIXES = {".html", ".htm"}
+PDF_SUFFIXES = {".pdf"}
 
 # A decision page is dense prose. Across the 8,246 decisions in the corpus the
 # median page holds 2,163 characters and the 1st percentile holds 978, so a page
@@ -26,10 +36,31 @@ from pypdf import PdfReader
 MIN_CHARS_PER_PAGE = 400
 
 
-def extract_text(pdf_path: Path) -> tuple[str, int]:
+def extract_pdf(pdf_path: Path) -> tuple[str, int]:
     reader = PdfReader(str(pdf_path))
     pages = [(p.extract_text() or "") for p in reader.pages]
     return "\n".join(pages), len(reader.pages)
+
+
+def extract_html(path: Path) -> tuple[str, int]:
+    """Text from an HTML decision. Page count is unknown, so it is 0.
+
+    Script and style bodies are dropped whole -- their contents are not text on
+    the page, and a JSON blob of analytics config left in would be indexed as if
+    it were part of the decision. The site furniture that survives tag-stripping
+    is clean.py's problem, not this function's.
+    """
+    raw = path.read_bytes().decode("utf-8", "replace")
+    body = re.sub(r"<(script|style)\b.*?</\1\s*>", " ", raw, flags=re.S | re.I)
+    body = re.sub(r"<br\s*/?>|</p>|</div>|</tr>|</h\d>", "\n", body, flags=re.I)
+    body = re.sub(r"<[^>]+>", " ", body)
+    return html_mod.unescape(body), 0
+
+
+def extract_text(path: Path) -> tuple[str, int]:
+    if path.suffix.lower() in HTML_SUFFIXES:
+        return extract_html(path)
+    return extract_pdf(path)
 
 
 def ocr_text(pdf_path: Path, dpi: int = 300) -> str:
@@ -85,15 +116,18 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="decision PDFs -> corpus JSONL")
     ap.add_argument("input_dir", type=Path, help="folder to search (recursive)")
     ap.add_argument("-o", "--out", type=Path, default=Path("dab.jsonl"))
-    ap.add_argument("--glob", default="**/*.pdf")
+    ap.add_argument("--glob", default="**/*", help="pattern under input_dir")
     ap.add_argument("--ocr", action="store_true",
                     help="re-OCR any PDF whose text layer fails the quality test")
     ap.add_argument("--ocr-dpi", type=int, default=300)
     args = ap.parse_args()
 
-    pdfs = sorted(args.input_dir.glob(args.glob))
+    wanted = HTML_SUFFIXES | PDF_SUFFIXES
+    pdfs = sorted(p for p in args.input_dir.glob(args.glob)
+                  if p.is_file() and p.suffix.lower() in wanted)
     if not pdfs:
-        print(f"No PDFs under {args.input_dir} matching {args.glob}", file=sys.stderr)
+        print(f"No decisions under {args.input_dir} matching {args.glob}",
+              file=sys.stderr)
         return 1
 
     total = failed = ocr_used = poor = 0
@@ -106,6 +140,8 @@ def main() -> int:
                 print(f"[skip] {pdf}: {e}", file=sys.stderr)
                 continue
 
+            # An HTML decision has no page count, so the per-page floor cannot
+            # apply; it is judged on having any text at all.
             ok, reason = text_quality(text, n_pages)
             did_ocr = False
             if not ok:
