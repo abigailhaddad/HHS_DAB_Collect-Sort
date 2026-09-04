@@ -133,7 +133,8 @@ Derived from [Kmisener/HHS-DAB-Decisions](https://huggingface.co/datasets/Kmisen
 which collected and text-extracted the original corpus. This adds the decisions
 it was missing, parsed metadata, website-furniture removal, evidence-based
 category labels and a typed schema. Build code and method:
-[github.com/abigailhaddad/hhs-dab](https://github.com/abigailhaddad/hhs-dab).
+[abigailhaddad/HHS_DAB_Collect-Sort](https://github.com/abigailhaddad/HHS_DAB_Collect-Sort)
+(a fork of the repository the source dataset came from).
 
 ## What the decisions are about
 
