@@ -110,3 +110,128 @@ categories:
     description: 'Provider enrollment revocation for abuse of billing privileges'
     citation: '42 CFR 424.535(a)(8)'
     pattern: '424\.535\s*\(\s*a\s*\)\s*\(\s*8\s*\)'
+
+  # --- OIG mandatory exclusions, section 1128(a) ---------------------------
+  # The four convictions that require exclusion, as against the discretionary
+  # (b) bases above. A conspicuous gap in the original sixteen, which had the
+  # permissive family and none of the mandatory one.
+
+  excl_a1_program_crime:
+    description: 'OIG mandatory exclusion for conviction of a program-related crime'
+    citation: '42 U.S.C. 1320a-7(a)(1) / 1128(a)(1)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*a\s*\)\s*\(\s*1\s*\)'
+
+  excl_a2_patient_abuse:
+    description: 'OIG mandatory exclusion for conviction relating to patient abuse or neglect'
+    citation: '42 U.S.C. 1320a-7(a)(2) / 1128(a)(2)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*a\s*\)\s*\(\s*2\s*\)'
+
+  excl_a3_felony_health_fraud:
+    description: 'OIG mandatory exclusion for felony health care fraud conviction'
+    citation: '42 U.S.C. 1320a-7(a)(3) / 1128(a)(3)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*a\s*\)\s*\(\s*3\s*\)'
+
+  excl_a4_controlled_substance_felony:
+    description: 'OIG mandatory exclusion for felony controlled substance conviction'
+    citation: '42 U.S.C. 1320a-7(a)(4) / 1128(a)(4)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*a\s*\)\s*\(\s*4\s*\)'
+
+  # --- remaining permissive exclusion bases, section 1128(b) ---------------
+
+  excl_b1_misdemeanor:
+    description: 'OIG exclusion for misdemeanor conviction relating to health care fraud'
+    citation: '42 U.S.C. 1320a-7(b)(1) / 1128(b)(1)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*1\s*\)'
+
+  excl_b5_federal_state_exclusion:
+    description: 'OIG exclusion following exclusion or suspension by a federal or state health care programme'
+    citation: '42 U.S.C. 1320a-7(b)(5) / 1128(b)(5)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*5\s*\)'
+
+  excl_b8_ownership_control:
+    description: 'OIG exclusion of an entity owned or controlled by a sanctioned individual'
+    citation: '42 U.S.C. 1320a-7(b)(8) / 1128(b)(8)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*8\s*\)'
+
+  excl_b15_owner_of_sanctioned_entity:
+    description: 'OIG exclusion of an individual who owns or controls a sanctioned entity'
+    citation: '42 U.S.C. 1320a-7(b)(15) / 1128(b)(15)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*15\s*\)'
+
+  # --- other enforcement authorities ---------------------------------------
+
+  cmp_1128a:
+    description: 'Civil money penalties under section 1128A (false or fraudulent claims)'
+    citation: '42 U.S.C. 1320a-7a / 1128A; 42 CFR Part 1003'
+    pattern: '\b1128A\b|1320a-7a|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*1003'
+
+  peer_review_1156:
+    description: 'Sanctions for failure to meet professional obligations (peer review)'
+    citation: '42 U.S.C. 1320c-5 / section 1156'
+    pattern: 'section\s*1156\b|1320c-5'
+
+  tobacco_products:
+    description: 'FDA Center for Tobacco Products enforcement (no-tobacco-sale orders, CMPs)'
+    citation: '21 U.S.C. 333(f); 21 CFR Part 17'
+    pattern: 'center for tobacco products|\bCTP\b|21\s*U\.?S\.?C\.?\s*333'
+
+  # --- provider and supplier enforcement -----------------------------------
+
+  immediate_jeopardy:
+    description: 'Findings of immediate jeopardy to resident or patient health and safety'
+    citation: '42 CFR 488.301'
+    pattern: 'immediate jeopardy'
+
+  life_safety_code:
+    description: 'Life Safety Code deficiencies'
+    citation: '42 CFR 483.90; NFPA 101'
+    pattern: 'life safety code'
+
+  infection_control:
+    description: 'Infection prevention and control deficiencies'
+    citation: '42 CFR 483.80'
+    pattern: 'infection control|infection prevention and control|483\.80'
+
+  emergency_preparedness:
+    description: 'Emergency preparedness requirements for participating providers'
+    citation: '42 CFR 483.73'
+    pattern: 'emergency preparedness|483\.73'
+
+  provider_agreement_498:
+    description: 'Provider and supplier appeal rights and procedures'
+    citation: '42 CFR Part 498'
+    pattern: '42\s*C\.?\s*F\.?\s*R\.?\s*part\s*498'
+
+  dmepos_supplier_standards:
+    description: 'DMEPOS supplier standards'
+    citation: '42 CFR 424.57'
+    pattern: '424\.57'
+
+  hospice:
+    description: 'Hospice certification, conditions of participation and payment disputes'
+    citation: '42 CFR Part 418'
+    pattern: '\bhospice\b'
+
+  # --- Medicare parts C and D ----------------------------------------------
+
+  medicare_advantage:
+    description: 'Medicare Advantage (Part C) organisation disputes'
+    citation: '42 CFR Part 422'
+    pattern: 'medicare advantage|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*422'
+
+  part_d_prescription:
+    description: 'Medicare Part D prescription drug plan disputes'
+    citation: '42 CFR Part 423'
+    pattern: 'prescription drug plan|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*423'
+
+  # --- other grant programmes ----------------------------------------------
+
+  iv_e_foster_care:
+    description: 'Title IV-E foster care and adoption assistance disallowances'
+    citation: 'Title IV-E, Social Security Act; 45 CFR Part 1356'
+    pattern: 'title iv-e|foster care maintenance'
+
+  tanf:
+    description: 'Temporary Assistance for Needy Families penalties and disallowances'
+    citation: 'Title IV-A, Social Security Act; 45 CFR Part 262'
+    pattern: '\bTANF\b|temporary assistance for needy families'

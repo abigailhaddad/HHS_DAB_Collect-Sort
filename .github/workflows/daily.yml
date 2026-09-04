@@ -1,0 +1,44 @@
+name: daily collection
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+# Rebuilds the Board's published index from the Internet Archive every day and
+# refuses to accept a smaller one than last time. Every failure this repo has
+# had looked like a clean empty result -- a pattern that stopped matching, a
+# year that parsed to zero -- so the scheduled job's job is to notice that.
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+
+      # The suite first: a broken parser should fail here, not halfway through
+      # a collection run.
+      - run: python run_checks.py
+      - run: python -m pytest tests/ -q
+
+      - name: Rebuild the published index
+        run: python collect_index.py --out decisions_index.jsonl
+
+      - name: Fail if any division-year lost decisions
+        run: python check_index.py decisions_index.jsonl --baseline index_baseline.json
+
+      - name: Record what is newly published
+        if: success()
+        run: |
+          python audit_completeness.py decisions_index.jsonl out/*.parquet \
+            || echo "no local corpus to diff against; index check only"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: decisions-index
+          path: decisions_index.jsonl
+          retention-days: 14

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+import categories
+
 pymupdf = pytest.importorskip("pymupdf", reason="PDF generation needs pymupdf")
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,7 +72,7 @@ def test_full_pipeline(corpus):
     (corpus / "out" / "alj.jsonl").write_bytes((corpus / "alj.jsonl").read_bytes())
     run(str(ROOT / "build_manifests.py"), "--dir", "out", cwd=corpus)
     manifest = json.loads((corpus / "out" / "manifest_alj.json").read_text())
-    assert manifest["slice_count"] == 16
+    assert manifest["slice_count"] == len(categories.CATEGORIES)
     for s in manifest["slices"]:
         assert s["description"] and s["citation"], s["category"]
 

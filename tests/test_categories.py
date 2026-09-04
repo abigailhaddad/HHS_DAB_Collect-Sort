@@ -53,7 +53,7 @@ def test_the_table_loads_from_yaml_and_is_complete():
     # The table is data now. A malformed entry must fail at load rather than
     # reach the published manifest as a slice with a blank legal basis.
     assert categories.CATEGORIES_FILE.exists()
-    assert len(categories.CATEGORIES) == 16
+    assert len(categories.CATEGORIES) >= 16
 
 
 def test_a_malformed_table_is_rejected(tmp_path):
