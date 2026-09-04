@@ -43,7 +43,8 @@ python fetch_missing.py missing.jsonl --out-dir decisions/
 # then attach to it (see fetch_via_browser.py)
 python fetch_via_browser.py missing_2026.jsonl --out-dir decisions/
 
-python run_checks.py && python -m pytest tests/     # bug ledger + test suite
+python verify.py decisions/                          # did we actually get them?
+python run_checks.py && python -m pytest tests/      # bug ledger + test suite
 ```
 
 `categories.yaml` holds the sixteen categories — pattern, description and legal
@@ -63,6 +64,12 @@ download.
 
 ## What the data doesn't tell you
 
+- **A 200 is not evidence of a decision.** The Akamai block, the Archive's own
+  miss page and a redirect to the section landing page all return 200 with a
+  full HTML skeleton and no decision in it. `verify.py` gives each fetched file
+  a named verdict — OK, CHALLENGE, ARCHIVE_MISS, NOT_A_DECISION, THIN, EMPTY —
+  so that checking is a command rather than something rewritten ad hoc each
+  time. CHALLENGE is a retry after re-solving in the browser, not missing data.
 - **The Archive lags.** Its most recent crawl of a page can be months old and
   Save Page Now needs an account, so anything published since is reachable only
   from a real browser — `fetch_via_browser.py`, attaching to a Chrome you start
