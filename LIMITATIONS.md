@@ -2,6 +2,11 @@
 
 Written before anyone relies on the slices, not after.
 
+The figures here are a snapshot, taken against the corpus as built on
+2026-09-04. Re-run `audit_completeness.py` and `build_manifests.py` for current
+ones; the counts in this file will drift as the collector picks up new
+decisions.
+
 ## The labels are a heuristic, not a reading
 
 `label.py` decides membership from where a citation appears and how often. That
