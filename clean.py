@@ -48,8 +48,11 @@ LINES = [
     # exactly what MARKERS detects. They disagreed: the detector accepted
     # "CASE | DECISION | JUDGE" while the remover demanded the FOOTNOTES tab as
     # well, so 21 decisions were correctly flagged as dirty and then not cleaned.
-    re.compile(r"CASE\s*\|\s*DECISION\s*\|\s*JUDGE(?:\s*\|\s*FOOTNOTES)?",
-               re.IGNORECASE),
+    # The tab set varies: "CASE | DECISION | JUDGE | FOOTNOTES" and also
+    # "CASE | DECISION | ANALYSIS | JUDGE | FOOTNOTES". Pinning the exact
+    # sequence missed the longer one on every decision that had it.
+    re.compile(r"CASE(?:\s*\|\s*(?:DECISION|ANALYSIS|JUDGE|FOOTNOTES|"
+               r"ORDER|BACKGROUND)){2,6}", re.IGNORECASE),
     re.compile(r"\.\.\.\s*TO TOP", re.IGNORECASE),
     # Residual bare links the breadcrumb pattern didn't swallow.
     re.compile(r"<\s*/[a-z0-9][^<>]{0,200}>", re.IGNORECASE),
@@ -79,7 +82,7 @@ MARKERS = re.compile(
     r"|Page sharing options"
     r"|Skip\s+Navigation"
     r"|Here.{0,3}s how you know"
-    r"|CASE\s*\|\s*DECISION\s*\|\s*JUDGE"
+    r"|CASE\s*\|\s*DECISION\s*\|"
     r"|\.\.\.\s*TO TOP",
     re.IGNORECASE,
 )

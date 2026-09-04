@@ -17,6 +17,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 import clean
+import fields
 import jsonl
 import metadata
 
@@ -30,6 +31,11 @@ SCHEMA = pa.schema([
     ("year", pa.int16()),
     ("tribunal", pa.string()),
     ("respondent", pa.string()),
+    ("judges", pa.list_(pa.string())),
+    ("reviews_decision_no", pa.string()),
+    ("provider_ids", pa.list_(pa.string())),
+    ("disposition_text", pa.string()),
+    ("source_url", pa.string()),
     ("num_pages", pa.int32()),
     ("num_chars", pa.int32()),
     ("had_web_chrome", pa.bool_()),
@@ -75,6 +81,12 @@ def build(path: Path, corpus: str) -> pa.Table:
             "year": meta["year"],
             "tribunal": meta["tribunal"],
             "respondent": meta["respondent"],
+            "judges": fields.judges(text),
+            "reviews_decision_no": fields.reviews_decision_no(text),
+            "provider_ids": fields.provider_ids(text),
+            # Verbatim, not a label. See fields.disposition_text.
+            "disposition_text": fields.disposition_text(text),
+            "source_url": r.get("source_url"),
             "num_pages": r.get("num_pages"),
             "num_chars": len(text),
             "had_web_chrome": had_chrome,
