@@ -11,10 +11,11 @@ filter on and sixteen category slices cut by legal basis.
 
 ## Where the data comes from
 
-Decisions are published on dab.hhs.gov. That site sits behind an Akamai edge
-block that returns 403 to everything — the year index pages, the decision files,
-even `robots.txt` — regardless of user agent, so collection goes through the
-Internet Archive instead. `collect_index.py` reads the archived per-year index
+Decisions are published at
+[hhs.gov/about/agencies/dab/decisions](https://www.hhs.gov/about/agencies/dab/decisions/).
+The whole of www.hhs.gov sits behind an Akamai edge block that returns 403 to
+automated clients — every path, any user agent, `robots.txt` included — so
+collection goes through the Internet Archive instead. `collect_index.py` reads the archived per-year index
 page for each division, which lists every decision the Board published that year
 with a link to it, and that list is what makes a completeness check possible:
 the corpus gets diffed against the publisher's own index rather than against a
@@ -38,6 +39,10 @@ python build_manifests.py --dir out/
 python audit_completeness.py decisions_index.jsonl out/*.parquet
 python fetch_missing.py missing.jsonl --out-dir decisions/
 
+# anything published since the Archive last crawled: start Chrome yourself,
+# then attach to it (see fetch_via_browser.py)
+python fetch_via_browser.py missing_2026.jsonl --out-dir decisions/
+
 python run_checks.py && python -m pytest tests/     # bug ledger + test suite
 ```
 
@@ -58,6 +63,12 @@ download.
 
 ## What the data doesn't tell you
 
+- **The Archive lags.** Its most recent crawl of a page can be months old and
+  Save Page Now needs an account, so anything published since is reachable only
+  from a real browser — `fetch_via_browser.py`, attaching to a Chrome you start
+  yourself. `check_index.py` runs daily against a committed baseline and fails
+  if any division-year loses decisions, because a collector that quietly returns
+  less is the failure this repo keeps having.
 - **Completeness is measured, not assumed, and it is not total.** Every
   decision the Board's index lists *and gives an identifiable number to* is in
   the corpus. 307 of its 9,042 listings carry no parseable number and sit
