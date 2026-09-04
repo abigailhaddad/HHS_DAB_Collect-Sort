@@ -34,6 +34,7 @@ SCHEMA = pa.schema([
     ("judges", pa.list_(pa.string())),
     ("reviews_decision_no", pa.string()),
     ("provider_ids", pa.list_(pa.string())),
+    ("dispositions", pa.list_(pa.string())),
     ("disposition_text", pa.string()),
     ("source_url", pa.string()),
     ("num_pages", pa.int32()),
@@ -84,7 +85,9 @@ def build(path: Path, corpus: str) -> pa.Table:
             "judges": fields.judges(text),
             "reviews_decision_no": fields.reviews_decision_no(text),
             "provider_ids": fields.provider_ids(text),
-            # Verbatim, not a label. See fields.disposition_text.
+            # A conservative label from the conclusion, often empty; and the
+            # conclusion itself, verbatim. See fields.dispositions.
+            "dispositions": fields.dispositions(text),
             "disposition_text": fields.disposition_text(text),
             "source_url": r.get("source_url"),
             "num_pages": r.get("num_pages"),

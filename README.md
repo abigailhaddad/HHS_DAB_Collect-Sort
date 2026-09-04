@@ -93,8 +93,17 @@ download.
 - **Some text layers are wrong rather than missing.** Three decisions extract to
   about one character per page; DAB No. 88 (1980) extracts at normal length and
   reads "Financisl", "yesr", "t:rsotee's". Only the first kind is detected.
-- **There is no outcome field.** The header parses; the disposition and any
-  exclusion period do not.
+- **The disposition label is deliberately partial.** `dispositions` reads only
+  operative first-person phrasing out of the decision's own conclusion, so 43%
+  of Appellate and 23% of ALJ decisions carry one and the rest are empty. Empty
+  means "not stated unambiguously here", never "nothing happened", and a rate
+  over the labelled subset is a rate over a non-random subset.
+  `disposition_text` carries the conclusion verbatim so you can judge for
+  yourself. Exclusion periods are not parsed at all.
+- **`appealed_in` is a join, not a census.** An ALJ decision is linked when an
+  Appellate decision names it. An appeal that settled, was withdrawn, or is
+  pending produces no Appellate decision, so empty means "no Appellate decision
+  here names it", not "nobody appealed".
 
 [LIMITATIONS.md](./LIMITATIONS.md) has the detail and the numbers.
 

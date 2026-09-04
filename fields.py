@@ -115,6 +115,43 @@ def judges(text: str) -> list[str]:
     return [_norm(m.group(1))] if m else []
 
 
+# Operative phrasings only: what the tribunal says it is doing, in the
+# conclusion, in the first person. Not "affirm" anywhere -- "petitioner asks us
+# to affirm" is not an affirmance, and a verb appears somewhere in 90% of
+# Appellate decisions.
+#
+# A list, because dispositions compound: "we reverse the ALJ's dismissal with
+# prejudice and remand the case" is both, and a single-value field silently
+# drops half of it.
+#
+# Coverage is deliberately partial -- 39% of Appellate and 23% of ALJ decisions
+# get a label and the rest are empty. An empty list means "not stated
+# unambiguously here", never "nothing happened", and a rate computed over the
+# labelled subset is a rate over a non-random subset.
+DISPOSITIONS = [
+    # First person only. "affirm the ALJ Decision" without a subject also
+    # matches "Petitioner asks us to affirm the ALJ Decision", which is the
+    # opposite of an affirmance -- the recall is not worth the wrong label.
+    ("affirmed", re.compile(r"\bwe affirm\b|\bwe sustain\b", re.I)),
+    ("reversed", re.compile(r"\bwe revers\w+\b|\b(?:is|are) reversed\b", re.I)),
+    ("modified", re.compile(r"\bwe modif\w+\b|\b(?:is|are) modified\b", re.I)),
+    ("remanded", re.compile(r"\bwe remand\b|\band remand\b"
+                            r"|\b(?:is|are) remanded\b|\bI remand\b", re.I)),
+    ("vacated", re.compile(r"\bwe vacat\w+\b|\b(?:is|are) vacated\b", re.I)),
+    ("dismissed", re.compile(r"\b(?:is|are) dismissed\b|\bI dismiss\b"
+                             r"|\bwe dismiss\b", re.I)),
+    ("sustained", re.compile(r"\bI sustain\b|\bI affirm\b|\bI uphold\b", re.I)),
+]
+
+
+def dispositions(text: str) -> list[str]:
+    """What the tribunal says it did, from its own conclusion. Possibly empty."""
+    span = disposition_text(text)
+    if not span:
+        return []
+    return [name for name, rx in DISPOSITIONS if rx.search(span)]
+
+
 def disposition_text(text: str) -> str | None:
     """The decision's own concluding passage, verbatim. Not a label.
 

@@ -77,3 +77,28 @@ def test_an_appellate_panel_returns_every_member():
             "Marc R. Hillson\n Presiding Board Member")
     got = fields.judges(text)
     assert set(got) == {"Judith A. Ballard", "Donald F. Garrett", "Marc R. Hillson"}
+
+
+def test_dispositions_read_the_operative_phrasing():
+    assert fields.dispositions("Conclusion\n\nFor all of the foregoing reasons, "
+                               "we affirm the ALJ Decision.\n") == ["affirmed"]
+    assert fields.dispositions("Conclusion\n\nI sustain CMS's determination that "
+                               "Petitioner was not in substantial compliance.\n") == ["sustained"]
+
+
+def test_a_compound_disposition_keeps_both_parts():
+    # "we reverse ... and remand" is both. A single-value field drops half of it.
+    got = fields.dispositions(
+        "Conclusion\n\nFor the foregoing reasons, we reverse the ALJ's dismissal "
+        "with prejudice and remand the case to the ALJ for further proceedings.\n")
+    assert set(got) == {"reversed", "remanded"}
+
+
+def test_asking_to_affirm_is_not_an_affirmance():
+    # A disposition verb appears somewhere in 90% of Appellate decisions.
+    assert fields.dispositions(
+        "Conclusion\n\nPetitioner asks us to affirm the ALJ Decision. We decline.\n") == []
+
+
+def test_no_conclusion_means_no_disposition():
+    assert fields.dispositions("We consider the arguments.\n\n/s/ A Judge\n") == []
