@@ -56,6 +56,7 @@ python build_dataset.py dab.jsonl --corpus dab -o out/
 python slice_jsonl.py dab.jsonl out/ --all            # -> a slice per category
 python build_manifests.py --dir out/
 python link_corpora.py out/dab.parquet out/alj.parquet # who appealed what
+python build_card.py --dir out/                       # dataset card, from the data
 
 # what is published but missing, then fetch it
 python audit_completeness.py decisions_index.jsonl out/*.parquet
