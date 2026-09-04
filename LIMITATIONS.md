@@ -35,13 +35,26 @@ taxonomy of what the Board decides — they are the subject areas that happened 
 produce bounded sets. The 1,244 are 15% of the 8,246 decisions in the corpora;
 the other 85% are unsliced.
 
-## Bad text is detected, not repaired
+## The text-quality gate catches empty layers, not garbled ones
 
-`pdf_to_jsonl.py` flags a text layer as poor and can re-OCR it, but only if you
-have the original PDFs. The corpus as published carries the layers it was built
-with, and some of the pre-1990 scans are badly garbled — DAB No. 88 (1980) reads
-"Financisl", "yesr", "t:rsotee's". Those decisions are in the corpus and their
-text is partly unusable. Nothing downstream knows that.
+`pdf_to_jsonl.py` gates on characters per page, which reliably catches a PDF
+that yielded nothing. Three decisions in the corpus extract at about one
+character per page and are effectively empty: DAB No. 2307 (Tennessee Department
+of Children's Services), DAB No. 2212 (Ocean Springs Nursing Center) and DAB No.
+2217 (Abstinence for Singles).
+
+It does not catch a text layer that is dense and wrong. DAB No. 88 (1980)
+extracts at a normal length and reads "Financisl", "yesr", "t:rsotee's" — about
+50% of its words are not in a dictionary, against a 22% baseline for legal prose.
+A shape test cannot see that; it needs a wordlist, which is not wired in.
+
+A first version of the gate also rejected text whose words were more than 4%
+vowel-free. That is not a garbling detector: the corpus median is 1.5%, the 95th
+percentile is 4.5%, and the three highest-scoring decisions are *In re LCD
+Complaint* cases, dense with CPT codes and extracted perfectly well. It was
+removed after it rejected a clean decision on the first end-to-end run.
+
+Repair needs the original PDFs, which are not in this repo either way.
 
 ## The corpora are not complete, and the gaps are uneven
 

@@ -19,14 +19,11 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-# A decision page is dense prose. Well under this and the text layer is a
-# scanning artefact -- page furniture, a few stray words -- even though it
-# clears any absolute character count a long document would pass.
+# A decision page is dense prose. Across the 8,246 decisions in the corpus the
+# median page holds 2,163 characters and the 1st percentile holds 978, so a page
+# under this is a scanning artefact -- and unlike an absolute character count, it
+# still catches a long document whose text layer produced nothing.
 MIN_CHARS_PER_PAGE = 400
-# Runs of letters with no vowel are what a failed text layer looks like once
-# it is decoded: "t:rsotee's", "Financisl", "~lich". Real legal prose sits near
-# 1%; the worst scans in this corpus reach 7%.
-MAX_NO_VOWEL_RATE = 0.04
 
 
 def extract_text(pdf_path: Path) -> tuple[str, int]:
@@ -54,6 +51,14 @@ def ocr_text(pdf_path: Path, dpi: int = 300) -> str:
 
 
 def no_vowel_rate(text: str) -> float:
+    """Share of words with no vowel. Reported, never used as a gate.
+
+    It looks like a garbling detector and is not one. Across the corpus it runs
+    1.5% at the median and 4.5% at the 95th percentile, and the three highest
+    scores -- 8% -- belong to In re LCD Complaint decisions, which are dense with
+    CPT codes and medical abbreviations and perfectly well extracted. Any
+    threshold low enough to catch a garbled scan throws those out with it.
+    """
     words = re.findall(r"[A-Za-z]{3,}", text)
     if not words:
         return 1.0
@@ -73,9 +78,6 @@ def text_quality(text: str, n_pages: int) -> tuple[bool, str]:
         return False, "empty text layer"
     if n_pages and len(stripped) / n_pages < MIN_CHARS_PER_PAGE:
         return False, f"{len(stripped) // max(n_pages, 1)} chars/page"
-    rate = no_vowel_rate(stripped)
-    if rate > MAX_NO_VOWEL_RATE:
-        return False, f"{rate:.1%} of words have no vowel"
     return True, ""
 
 
