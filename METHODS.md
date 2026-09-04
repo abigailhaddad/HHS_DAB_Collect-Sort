@@ -75,8 +75,17 @@ stays.
 
 Running all sixteen categories against both corpora rather than the ten and
 eleven that were cut turns up substantial slices nobody had pulled:
-`enroll_a3_felony` has 157 ALJ decisions, `enroll_a5_nonoperational` 136, and
-`excl_b4_license_revocation` 143. `samhsa_otp_cert` has none in either corpus.
+`excl_b4_license_revocation` has 208 ALJ decisions, `enroll_a3_felony` 158,
+`enroll_a5_nonoperational` 135 and `clia_lab_sanctions` 118.
+
+Collecting the decisions the corpus was missing moved these again, and the
+shape of the movement is what you would expect from filling a 1999-2006 hole:
+`excl_b4_license_revocation` gained 65 and `clia_lab_sanctions` 56, while
+`enroll_a3_felony` gained one, because revocation under 42 CFR 424.535(a)(3)
+post-dates that window.
+
+`samhsa_otp_cert` has no members in either corpus, and `opo_decert` none in the
+Appellate Division.
 
 ## Calibration
 

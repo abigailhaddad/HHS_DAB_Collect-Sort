@@ -58,16 +58,17 @@ download.
 
 ## What the data doesn't tell you
 
-- **Both corpora are incomplete, unevenly.** Counting CR numbers present per
-  block of a thousand: CR5000–5999 is 96% there and CR4000–4999 is 27%. A rate
-  computed over time inherits that shape. `audit_completeness.py` measures it
-  against the published index.
+- **Completeness is measured, not assumed, and it is not total.** Every
+  decision the Board's index lists *and gives an identifiable number to* is in
+  the corpus. 307 of its 9,042 listings carry no parseable number and sit
+  outside that check entirely. `audit_completeness.py` runs the diff.
 - **A category label is a heuristic, not a reading.** `label.py` decides from
   where a citation appears and how often, which is a much better proxy than a
   substring match and is still a proxy. No precision or recall figure is claimed
   anywhere, because there is no hand-labelled sample to compute one from.
-- **The slices are not a partition.** 1,244 of 8,246 decisions land in at least
-  one slice; 9 land in more than one; there is no residual category.
+- **The slices are not a partition.** 1,393 of 9,228 decisions (15%) land in at
+  least one slice; 9 land in more than one; there is no residual category. Four
+  category/corpus pairs are empty, `samhsa_otp_cert` in both.
 - **A quarter of the corpus was captured from the web page, not the file.** The
   HHS breadcrumb, the "official website" banner and the rest come with it — 19%
   of Appellate Division and 42% of ALJ decisions. `clean.py` strips it.
