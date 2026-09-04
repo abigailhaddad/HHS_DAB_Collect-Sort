@@ -1,0 +1,20 @@
+[project]
+name = "hhs-dab-collect-sort"
+version = "0.1.0"
+description = "Collect and sort HHS Departmental Appeals Board decisions"
+requires-python = ">=3.10"
+dependencies = [
+    "pypdf>=4.0",
+    "pyarrow>=14.0",
+]
+
+[project.optional-dependencies]
+# Only needed for `pdf_to_jsonl.py --ocr`, which also wants the tesseract binary.
+ocr = ["pymupdf>=1.24", "pytesseract>=0.3", "pillow>=10.0"]
+
+[tool.setuptools]
+py-modules = [
+    "build_dataset", "build_manifests", "categories", "categorize_counts",
+    "clean", "collect_index", "audit_completeness", "label", "metadata",
+    "pdf_to_jsonl", "slice_jsonl",
+]

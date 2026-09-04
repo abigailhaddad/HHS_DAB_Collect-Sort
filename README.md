@@ -1,58 +1,86 @@
-# HHS DAB decisions — collect and sort
+# HHS DAB decisions
 
-Every published decision of the HHS Departmental Appeals Board, in two corpora:
-the Appellate Division and its predecessor Grant Appeals Board (3,300
-decisions, Decision No. 1 through 3225, 1974 to present) and the Civil Remedies
-Division ALJs (4,946 decisions, CR1 through CR6778, 1981 to present). PDFs in, typed Parquet out, with
-the header parsed into fields you can filter on and sixteen category slices cut
-by statutory basis.
+Every published decision of the HHS Departmental Appeals Board, collected from
+the Board's own year-by-year index and sorted by the statutory basis the case
+was decided under. Two tribunals: the Appellate Division and its predecessor
+Grant Appeals Board (3,300 decisions, 1974 to present) and the Civil Remedies
+Division ALJs (4,946 decisions, 1981 to present).
 
-## The pipeline
+PDFs and HTML in, typed Parquet out, with the header parsed into columns you can
+filter on and sixteen category slices cut by legal basis.
+
+## Where the data comes from
+
+Decisions are published on dab.hhs.gov. That site sits behind an Akamai edge
+block that returns 403 to everything — the year index pages, the decision files,
+even `robots.txt` — regardless of user agent, so collection goes through the
+Internet Archive instead. `collect_index.py` reads the archived per-year index
+page for each division, which lists every decision the Board published that year
+with a link to it, and that list is what makes a completeness check possible:
+the corpus gets diffed against the publisher's own index rather than against a
+guess about which decision numbers ought to exist.
+
+Older decisions are served as HTML (`board-decisions/1995/dab1550.html`) and
+newer ones as PDF (`alj-decisions/2016/cr4685.pdf`).
+
+## Running it
 
 ```bash
-python pdf_to_jsonl.py ./dab_pdfs -o dab.jsonl --ocr   # PDFs -> text
-python build_dataset.py dab.jsonl --corpus dab -o out/ # -> typed Parquet
-python slice_jsonl.py dab.jsonl out/ --all             # -> category slices
-python build_manifests.py --dir out/                   # -> manifest per corpus
-python run_checks.py                                   # regression checks
+pip install -e .                                    # add [ocr] for --ocr
+
+python collect_index.py --out decisions_index.jsonl # what the Board published
+python pdf_to_jsonl.py ./dab_pdfs -o dab.jsonl      # decisions -> text
+python build_dataset.py dab.jsonl --corpus dab -o out/
+python slice_jsonl.py dab.jsonl out/ --all          # -> 16 category slices
+python build_manifests.py --dir out/
+python audit_completeness.py decisions_index.jsonl out/*.parquet
+
+python run_checks.py                                # regression checks
 ```
 
 `categories.py` holds the sixteen categories — pattern, description and legal
-citation together in one table. Adding a category means adding it there.
+citation in one table. Adding a category means adding it there; the slicer, the
+counter and the manifest all read from it.
 
-## What each step does
+The corpora are not committed. `.gitignore` keeps `*.jsonl` and `*.parquet` out
+of the repo; 284 MB of JSONL becomes 53 MB of zstd Parquet, which is the
+difference between a dataset you can range-query over HTTP and one you have to
+download.
 
-`pdf_to_jsonl.py` reads the text layer and, with `--ocr`, re-OCRs any PDF that
-fails a quality test. The test is chars-per-page and the share of words with no
-vowel, not an absolute character count: the 1980s scans in this corpus have text
-layers that are present, long and garbled, and a character floor passes them.
+## What the data doesn't tell you
 
-`clean.py` strips the HHS website furniture. About a quarter of the corpus was
-captured from dab.hhs.gov rather than a PDF, so the extracted text carries the
-site's breadcrumb, the "official website of the United States government"
-banner and whatever promo box HHS was running — 19% of Appellate Division
-decisions and 42% of ALJ decisions, 1.6 MB in total.
+- **Both corpora are incomplete, unevenly.** Counting CR numbers present per
+  block of a thousand: CR5000–5999 is 96% there and CR4000–4999 is 27%. A rate
+  computed over time inherits that shape. `audit_completeness.py` measures it
+  against the published index.
+- **A category label is a heuristic, not a reading.** `label.py` decides from
+  where a citation appears and how often, which is a much better proxy than a
+  substring match and is still a proxy. No precision or recall figure is claimed
+  anywhere, because there is no hand-labelled sample to compute one from.
+- **The slices are not a partition.** 1,244 of 8,246 decisions land in at least
+  one slice; 9 land in more than one; there is no residual category.
+- **A quarter of the corpus was captured from the web page, not the file.** The
+  HHS breadcrumb, the "official website" banner and the rest come with it — 19%
+  of Appellate Division and 42% of ALJ decisions. `clean.py` strips it.
+- **Some text layers are wrong rather than missing.** Three decisions extract to
+  about one character per page; DAB No. 88 (1980) extracts at normal length and
+  reads "Financisl", "yesr", "t:rsotee's". Only the first kind is detected.
+- **There is no outcome field.** The header parses; the disposition and any
+  exclusion period do not.
 
-`metadata.py` parses the header into decision number, docket numbers, date,
-tribunal and respondent agency, across the four template generations the corpus
-spans. Coverage: decision number 98.6% / 87.9% (Appellate / ALJ), docket 92.1% /
-98.1%, date 94.2% / 99.9%, tribunal 89.9% / 97.5%, respondent 72.8% / 83.3%.
-Dates come from the text, not the filename — 101 filenames disagree with the
-decision they contain, and some are simply typed wrong (`0980.02.25DAB083`).
+[LIMITATIONS.md](./LIMITATIONS.md) has the detail and the numbers.
 
-`label.py` decides whether a decision is *about* a category rather than whether
-it mentions one. See [METHODS.md](./METHODS.md).
+## How categories are assigned
 
-`build_dataset.py` writes one Parquet file per corpus, zstd-compressed. 284 MB
-of JSONL becomes 53 MB, which is the difference between a dataset you can
-range-query over HTTP and one you have to download.
+[METHODS.md](./METHODS.md). Short version: matching a citation anywhere in the
+full text answers a different question than the category name asks, because the
+Board's standing cite on documenting costs is a Head Start case, because
+decisions enumerate provisions they are not applying, and because petitioners
+cite provisions they then lose on. `label.py` blanks out case citations and
+requires the surviving matches to carry weight. Across the twenty-one slices
+that were published from a plain substring match, 889 records become 749.
 
-## Data
+## License
 
-The corpora are not committed. They live on Hugging Face; `.gitignore` keeps
-`*.jsonl` and `*.parquet` out of the repo.
-
-## Limitations
-
-[LIMITATIONS.md](./LIMITATIONS.md) — what would have to be true for the slices
-to be wrong, written before anyone relies on them.
+Code under the [MIT License](./LICENSE.txt). The decisions are works of the
+United States government and are not subject to copyright.

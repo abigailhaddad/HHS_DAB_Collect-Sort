@@ -1,0 +1,18 @@
+name: checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  run-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      # run_checks.py holds a case for every bug found by hand. It needs no
+      # data: the cases carry the decision text they test inline.
+      - run: python run_checks.py
