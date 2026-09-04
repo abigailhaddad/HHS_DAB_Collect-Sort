@@ -125,3 +125,18 @@ def test_header_words_do_not_fuzzy_match_a_month():
     # Real OCR damage must still resolve.
     assert metadata._month("Nay") == 5
     assert metadata._month("Harch") == 3
+
+
+def test_filename_numbers():
+    f = metadata.decision_no_from_id
+    assert f("1990.10.15DAB1200 Sumter County Opportunity, Inc.") == "1200"
+    assert f("2016.08.17 CR4685 Rochelle Gardens Care Center, v. CMS") == "CR4685"
+    # The trailing R is the decision on reconsideration -- a different document.
+    assert f("1987.07.02CR10 Inspector General v. Frank P. Silver, M.D.") == "CR10"
+    assert f("1988.05.02 CR10R The Inspector General v. Frank P. Silver") == "CR10R"
+    # "No." between the word and the number; without it these fell through to
+    # the header parse and four rulings came back as 1771.
+    assert f("2016.07.25 ALJ Ruling No. 2016-14 Great Lakes Healthcare") == "RULING2016-14"
+    assert f("2005.01.25RUL2005-1 Oklahoma Health Care Authority") == "RULING2005-1"
+    assert f("2012.07.17ALJRUL 2012-1 Douglas L. Clore v. CMS") == "RULING2012-1"
+    assert f("a caption with no number") is None

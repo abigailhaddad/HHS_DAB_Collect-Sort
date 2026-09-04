@@ -146,9 +146,15 @@ def _to_date(mon: str, day: str, year: str) -> str | None:
 # No leading \b: in "1990.10.15DAB1200" the digit and the D are both word
 # characters, so there is no boundary between them and an anchored pattern
 # matches nothing.
-FILENAME_RULING = re.compile(r"(?:ALJ\s*)?RUL(?:ING)?[\s.,;_-]*(\d{4}-\d{1,3})",
-                             re.IGNORECASE)
-FILENAME_NO = re.compile(r"(DAB|CR)[\s;,._-]*0*(\d{1,5})", re.IGNORECASE)
+# "No." may sit between the word and the number -- "ALJ Ruling No. 2016-14" --
+# and without it the ruling fell through to the header parse, which picked a
+# number out of the body: four different rulings came back as 1771.
+FILENAME_RULING = re.compile(
+    r"(?:ALJ\s*)?RUL(?:ING)?[\s.,;_-]*(?:No\.?[\s]*)?(\d{4}-\d{1,3})",
+    re.IGNORECASE)
+# The trailing R is part of the number: CR10R is the decision on reconsideration
+# of CR10, a different document. Dropping it merged the two.
+FILENAME_NO = re.compile(r"(DAB|CR)[\s;,._-]*0*(\d{1,5}R?)\b", re.IGNORECASE)
 
 
 def decision_no_from_id(record_id: str) -> str | None:
@@ -170,7 +176,7 @@ def decision_no_from_id(record_id: str) -> str | None:
     if not m:
         return None
     prefix = "CR" if m.group(1).upper() == "CR" else ""
-    return f"{prefix}{m.group(2)}"
+    return f"{prefix}{m.group(2).upper()}"
 
 
 def _norm_no(raw: str) -> str:
