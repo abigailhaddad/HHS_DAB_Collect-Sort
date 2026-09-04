@@ -51,6 +51,31 @@ LINK = re.compile(
 SELF_LINK = re.compile(r"/(?:alj|board)-decisions/\d{4}/index\.html?$", re.IGNORECASE)
 
 
+def decision_no_from_caption(caption: str, url: str = "") -> str | None:
+    """The decision number a listing gives, from its caption or failing that
+    its URL slug.
+
+    Order matters. ALJ Rulings are a separate series captioned "ALJ Ruling No.
+    2014-17", and the generic "No. NNNN" branch reads that as decision number
+    2014 -- which collapsed all 23 of a year's rulings onto one identifier.
+    """
+    m = re.search(r"\bALJ\s+Ruling\s+No\.?\s*(\d{4}-\d{1,3})\b", caption,
+                  re.IGNORECASE)
+    if m:
+        return "RULING" + m.group(1)
+
+    m = re.search(r"\b(CR\s?\d{1,5}|DAB\s?(?:No\.?\s?)?\d{1,5}"
+                  r"|Decision\s+No\.?\s?\d{1,5}|No\.\s?\d{1,5})\b",
+                  caption, re.IGNORECASE)
+    if not m and url:   # fall back to the slug: "board-dab-3027", "alj-cr5791"
+        m = re.search(r"/(?:board|alj)-((?:dab|cr)-?\d{1,5})/", url, re.IGNORECASE)
+    if not m:
+        return None
+    no = re.sub(r"[\s.\-]|No", "", m.group(1), flags=re.I).upper()
+    # A bare four-digit number in a caption is a year, not a decision.
+    return None if re.fullmatch(r"(?:19|20)\d\d", no) else no
+
+
 def parse_index(page: str, division: str, year: int) -> list[dict]:
     out, seen = [], set()
     for href, text in LINK.findall(page):
@@ -59,34 +84,10 @@ def parse_index(page: str, division: str, year: int) -> list[dict]:
             continue
         seen.add(url)
         caption = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html.unescape(text))).strip()
-        # Captions render the number three ways: "CR4685", "DAB2740" (no "No."),
-        # and "Decision No. 1550". Requiring "No." after DAB dropped every
-        # Appellate decision on the page.
-        # ALJ Rulings first. Their captions read "ALJ Ruling No. 2014-17", and
-        # the generic "No. NNNN" branch reads that as decision number 2014 --
-        # so all 23 rulings of a year collapsed onto one identifier.
-        m = re.search(r"\bALJ\s+Ruling\s+No\.?\s*(\d{4}-\d{1,3})\b",
-                      caption, re.IGNORECASE)
-        if m:
-            return_no = "RULING" + m.group(1)
-        else:
-            m = re.search(r"\b(CR\s?\d{1,5}|DAB\s?(?:No\.?\s?)?\d{1,5}"
-                          r"|Decision\s+No\.?\s?\d{1,5}|No\.\s?\d{1,5})\b",
-                          caption, re.IGNORECASE)
-            return_no = None
-            if not m:   # fall back to the slug: "board-dab-3027", "alj-cr5791"
-                m = re.search(r"/(?:board|alj)-((?:dab|cr)-?\d{1,5})/", url,
-                              re.IGNORECASE)
-            if m:
-                return_no = re.sub(r"[\s.\-]|No", "", m.group(1),
-                                   flags=re.I).upper()
-            # A bare four-digit number in a caption is a year, not a decision.
-            if return_no and re.fullmatch(r"(?:19|20)\d\d", return_no):
-                return_no = None
         out.append({
             "division": division,
             "year": year,
-            "decision_no": return_no,
+            "decision_no": decision_no_from_caption(caption, url),
             "caption": caption,
             "url": url,
         })

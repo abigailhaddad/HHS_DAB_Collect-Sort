@@ -46,6 +46,15 @@ DATE_LABELLED_RE = re.compile(
 DATE_LABEL_PRESENT = re.compile(r"\bdate\s*[:~.]", re.IGNORECASE)
 
 # "Decision No. 2024", "Decision No. CR1723", "DAB No. 3117", "DAB CR6187"
+#
+# Deliberately strict. The 1970s-80s scans mangle the label itself -- "Decis ion
+# No. 33", "Decision 110. 27", "recision No. 146", "Decision ~o. 195", "Decision
+# No .3~" -- and loosening the pattern enough to catch those was measured
+# against the Board's published index over 1,566 decisions: agreement rose one
+# point while wrong answers rose by 96, because a loose pattern picks a fragment
+# ("No .3~" -> 3) or a citation to another decision. A null is recoverable; a
+# plausible wrong number is not. Where the number matters, take it from the
+# published index -- see build_dataset.py.
 DECISION_RE = re.compile(
     r"decision\s+nos?\.?\s*((?:CR)?\s*\d{1,5})", re.IGNORECASE)
 DAB_NO_RE = re.compile(r"\bDAB\s+(?:No\.\s*)?((?:CR)?\s*\d{1,5})", re.IGNORECASE)
@@ -131,6 +140,39 @@ def _to_date(mon: str, day: str, year: str) -> str | None:
         return None
 
 
+# The decision number as it appears in the source filename:
+# "1990.10.15DAB1200 Sumter County", "2016.08.17 CR4685 Rochelle Gardens",
+# "2005.01.25RUL2005-1 Oklahoma", "2012.07.17ALJRUL 2012-1 Douglas L. Clore".
+# No leading \b: in "1990.10.15DAB1200" the digit and the D are both word
+# characters, so there is no boundary between them and an anchored pattern
+# matches nothing.
+FILENAME_RULING = re.compile(r"(?:ALJ\s*)?RUL(?:ING)?[\s.,;_-]*(\d{4}-\d{1,3})",
+                             re.IGNORECASE)
+FILENAME_NO = re.compile(r"(DAB|CR)[\s;,._-]*0*(\d{1,5})", re.IGNORECASE)
+
+
+def decision_no_from_id(record_id: str) -> str | None:
+    """Read the decision number out of the source filename.
+
+    Measured against the 8,246-decision corpus this beats parsing the header:
+    98% coverage for the Appellate Division against 99% for the text, but 35
+    numbers shared by more than one decision against 132. OCR mangles the label
+    in the older scans -- "Decis ion No. 33", "recision No. 146" -- and a failed
+    parse then picks up a citation to some other decision, which is how 28
+    different decisions all came back as number 436.
+    """
+    if not record_id:
+        return None
+    m = FILENAME_RULING.search(record_id)
+    if m:
+        return "RULING" + m.group(1)
+    m = FILENAME_NO.search(record_id)
+    if not m:
+        return None
+    prefix = "CR" if m.group(1).upper() == "CR" else ""
+    return f"{prefix}{m.group(2)}"
+
+
 def _norm_no(raw: str) -> str:
     return re.sub(r"\s+", "", raw).upper()
 
@@ -146,8 +188,12 @@ def parse(text: str, record_id: str = "") -> dict:
     for rx in (DECISION_RE, DAB_NO_RE):
         m = rx.search(head)
         if m:
-            decision_no = _norm_no(m.group(1))
-            break
+            candidate = _norm_no(m.group(1))
+            # A four-digit number next to "Decision" is a year far more often
+            # than it is a decision number in this corpus.
+            if not re.fullmatch(r"(?:19|20)\d\d", candidate):
+                decision_no = candidate
+                break
 
     dockets = []
     m = DOCKET_RE.search(head)
@@ -181,6 +227,7 @@ def parse(text: str, record_id: str = "") -> dict:
 
     return {
         "decision_no": decision_no,
+        "decision_no_from_id": decision_no_from_id(record_id),
         "docket_nos": dockets,
         "decision_date": decision_date,
         "year": int(decision_date[:4]) if decision_date else filename_year,

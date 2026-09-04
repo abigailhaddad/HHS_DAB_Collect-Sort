@@ -56,3 +56,33 @@ def test_both_suffixes_are_collected(tmp_path):
     found = sorted(p.name for p in tmp_path.glob("**/*")
                    if p.is_file() and p.suffix.lower() in wanted)
     assert found == ["a.pdf", "b.html", "c.HTM"]
+
+
+SPLIT_NUMBER_HTML = """<html><body>
+<table><tr><td>Docket No.C-99-733</td></tr>
+<tr><td>Decision No. <strong>CR7</strong><b>38</b></td></tr></table>
+<p>Petitioner <b>VITAS</b> Healthcare <i>Corporation</i> appealed.</p>
+</body></html>"""
+
+
+def test_inline_tags_do_not_split_a_number():
+    # The 1999-2006 template renders "Decision No. CR738" as
+    # "<strong>CR7</strong><b>38</b>". Replacing every tag with a space made
+    # that "CR7 38", and eleven decisions parsed as CR7.
+    import tempfile, pathlib
+    f = pathlib.Path(tempfile.mkstemp(suffix=".html")[1])
+    f.write_text(SPLIT_NUMBER_HTML, encoding="utf-8")
+    text, _ = extract.extract_text(f)
+    assert "CR738" in text
+    assert "CR7 38" not in text
+
+
+def test_block_tags_still_separate_their_contents():
+    # ...but table cells must not run together into one word.
+    import tempfile, pathlib
+    f = pathlib.Path(tempfile.mkstemp(suffix=".html")[1])
+    f.write_text(SPLIT_NUMBER_HTML, encoding="utf-8")
+    text, _ = extract.extract_text(f)
+    assert "C-99-733Decision" not in text
+    # Inline emphasis inside a sentence must not lose its spaces either.
+    assert "Petitioner VITAS Healthcare Corporation appealed." in " ".join(text.split())

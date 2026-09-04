@@ -52,7 +52,16 @@ _ARTICLE = re.compile(r"<article\b[^>]*>(.*)</article\s*>", re.S | re.I)
 _MAIN = re.compile(r"<main\b[^>]*>(.*)</main\s*>", re.S | re.I)
 _PAGE_TITLE = re.compile(r'<h1[^>]*class="[^"]*page-title[^"]*"[^>]*>(.*?)</h1>',
                          re.S | re.I)
-_BLOCK_END = re.compile(r"<br\s*/?>|</p>|</div>|</tr>|</h\d>|</li>", re.I)
+# Block-level boundaries become whitespace; everything else is removed with no
+# separator at all. Replacing every tag with a space splits text that inline
+# markup runs through: the 1999-2006 decisions render the number as
+# "Decision No. <strong>CR7</strong><b>38</b>", which came out "CR7 38" and
+# parsed as decision CR7 -- eleven different decisions collapsed onto it.
+_BLOCK = ("address|article|aside|blockquote|br|caption|col|colgroup|dd|div|dl|dt|"
+          "fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|legend|li|main|"
+          "nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul")
+_BLOCK_TAG = re.compile(rf"</?(?:{_BLOCK})\b[^>]*>", re.I)
+_ANY_TAG = re.compile(r"<[^>]+>")
 
 
 def extract_html(path: Path) -> tuple[str, int]:
@@ -85,8 +94,8 @@ def extract_html(path: Path) -> tuple[str, int]:
             body = m.group(1)
             break
 
-    body = _BLOCK_END.sub("\n", title + "\n" + body)
-    body = re.sub(r"<[^>]+>", " ", body)
+    body = _BLOCK_TAG.sub("\n", title + "\n" + body)
+    body = _ANY_TAG.sub("", body)
     return html_mod.unescape(body), 0
 
 
