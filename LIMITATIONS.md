@@ -29,11 +29,11 @@ the issue will be missed unless the basis recurs three times.
 
 ## Slices overlap, and they are not a partition
 
-Of the 1,244 decisions that land in at least one slice, 9 land in more than
-one. There is no residual "other" category, and the sixteen categories are not a
-taxonomy of what the Board decides — they are the subject areas that happened to
-produce bounded sets. The 1,244 are 15% of the 8,246 decisions in the corpora;
-the other 85% are unsliced.
+Of the 6,061 decisions that land in at least one slice, 1,357 land in more than
+one. There is no residual "other" category, and the 38 categories are not a
+taxonomy of what the Board decides — they are the subject areas that produce
+bounded sets. The 6,061 are 65% of the 9,391 decisions in the corpora; the other
+35% are unsliced, and 8 of the 76 category/corpus pairs are empty.
 
 ## The text-quality gate catches empty layers, not garbled ones
 
@@ -56,37 +56,26 @@ removed after it rejected a clean decision on the first end-to-end run.
 
 Repair needs the original PDFs, which are not in this repo either way.
 
-## The corpora are not complete, and the gaps are uneven
+## Completeness is measured against the index, and is not total
 
-Neither corpus has been checked against the Board's own published index, but the
-decision numbers themselves say enough: they are not contiguous.
+Both corpora hold every decision the Board's own year-by-year index lists and
+gives an identifiable number to: 8,897 of 8,897. `audit_completeness.py` runs
+that diff, and it is the reason the claim is checkable at all — the corpus is
+compared against the publisher's list rather than against a guess about which
+decision numbers ought to exist.
 
-The Appellate Division corpus holds 3,009 distinct decision numbers spanning 1
-to 3,225 — 216 numbers in that range are absent, 7%.
+The remaining 323 index listings carry no parseable decision number and sit
+outside the check entirely. They are mostly reconsideration decisions and
+rulings with irregular captions.
 
-The ALJ corpus is worse and, more importantly, uneven. Counting how many CR
-numbers in each block of a thousand appear anywhere in the corpus:
+Two decisions are absent for reasons at the source. DAB No. 437 (1983) is
+published as a page containing the six characters "DAB437" and nothing else,
+which a live fetch reproduces. Three more extract to about one character per
+page and are flagged by `text_layer_ok`.
 
-| block | present |
-|---|---|
-| CR1–999 | 450 |
-| CR1000–1999 | 393 |
-| CR2000–2999 | 864 |
-| CR3000–3999 | 579 |
-| CR4000–4999 | 272 |
-| CR5000–5999 | 964 |
-| CR6000–6999 | 736 |
-
-A collection that is 96% complete for CR5000–5999 and 27% complete for
-CR4000–4999 is not missing decisions at random, and any count of decisions per
-year, per basis or per outcome will inherit that shape. Some of this is
-measurement — 596 ALJ records (12%) have no decision number parsed and are
-invisible to this table — but redistributing all 596 evenly would not close a
-gap that size.
-
-Until someone reconciles both corpora against the published index, treat them as
-a large collection, not the population, and do not compute a rate over time from
-them.
+Before this collection the same audit put the ALJ corpus at 76%, with 971 of the
+decisions issued between 1999 and 2006 missing entirely. A rate computed over
+time on that corpus would have inherited the hole.
 
 ## No outcome field
 

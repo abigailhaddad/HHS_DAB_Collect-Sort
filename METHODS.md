@@ -73,7 +73,7 @@ dropped, 1 added.
 exclusion was imposed "pursuant to section 1128(b)(6)(B)", is the one that
 stays.
 
-Running all sixteen categories against both corpora rather than the ten and
+Running all 38 categories against both corpora rather than the ten and
 eleven that were cut turns up substantial slices nobody had pulled:
 `excl_b4_license_revocation` has 208 ALJ decisions, `enroll_a3_felony` 158,
 `enroll_a5_nonoperational` 135 and `clia_lab_sanctions` 118.

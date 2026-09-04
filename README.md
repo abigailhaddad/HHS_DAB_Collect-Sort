@@ -1,28 +1,47 @@
 # HHS DAB decisions
 
-Every published decision of the HHS Departmental Appeals Board, collected from
-the Board's own year-by-year index and sorted by the statutory basis the case
-was decided under. Two tribunals: the Appellate Division and its predecessor
-Grant Appeals Board (3,300 decisions, 1974 to present) and the Civil Remedies
-Division ALJs (4,946 decisions, 1981 to present).
+Every published decision of the HHS Departmental Appeals Board — an
+administrative tribunal inside HHS whose ALJs hear a case first and whose
+Appellate Division reviews them. PDFs and HTML in, typed Parquet out, with the
+header and parts of the body parsed into columns and 38 category slices cut by
+legal basis.
 
-PDFs and HTML in, typed Parquet out, with the header parsed into columns you can
-filter on and sixteen category slices cut by legal basis.
+**This is a cleanup of [KMisener90/HHS_DAB_Collect-Sort](https://github.com/KMisener90/HHS_DAB_Collect-Sort)**,
+which assembled the original corpus and wrote the first version of the
+extraction and slicing scripts. That work is the reason this exists.
+
+| | decisions | span |
+|---|---|---|
+| Appellate Division, and the Grant Appeals Board before it | 3,309 | 1974-03-07 – 2026-08-21 |
+| Civil Remedies Division (ALJs) | 6,082 | 1985-05-14 – 2026-07-28 |
+
+## What this adds
+
+- **A collector, and a completeness check with something to check against.**
+  `collect_index.py` reads the Board's own year-by-year index, so the corpus is
+  diffed against the publisher's list rather than a guess about which decision
+  numbers ought to exist. That found 1,773 published decisions the corpus did
+  not have — all of 1999–2006 on the ALJ side, and most of 2026.
+- **Membership by evidence rather than substring.** Matching a citation anywhere
+  in the full text answers a different question than a category name asks; see
+  [METHODS.md](./METHODS.md).
+- **Parsed fields**: decision and docket numbers, date, tribunal, respondent,
+  judges, the ALJ decision an Appellate decision reviews, provider identifiers,
+  and a conservative disposition.
+- **Website furniture stripped.** Some decisions were captured from the web page
+  rather than the file and carry the site's navigation as prose.
+- **Tests.** `run_checks.py` is a case per bug found by hand; `tests/` covers
+  module contracts, an end-to-end run and integrity checks over a built corpus.
 
 ## Where the data comes from
 
 Decisions are published at
 [hhs.gov/about/agencies/dab/decisions](https://www.hhs.gov/about/agencies/dab/decisions/).
-The whole of www.hhs.gov sits behind an Akamai edge block that returns 403 to
-automated clients — every path, any user agent, `robots.txt` included — so
-collection goes through the Internet Archive instead. `collect_index.py` reads the archived per-year index
-page for each division, which lists every decision the Board published that year
-with a link to it, and that list is what makes a completeness check possible:
-the corpus gets diffed against the publisher's own index rather than against a
-guess about which decision numbers ought to exist.
-
-Older decisions are served as HTML (`board-decisions/1995/dab1550.html`) and
-newer ones as PDF (`alj-decisions/2016/cr4685.pdf`).
+The whole of www.hhs.gov returns 403 to automated clients — every path, any user
+agent, `robots.txt` included — so collection routes through the Internet
+Archive, and through a browser you start yourself for anything published since
+its last crawl. Older decisions are served as HTML, newer ones as PDF, and since
+2017 each decision has its own page.
 
 ## Running it
 
@@ -30,92 +49,49 @@ newer ones as PDF (`alj-decisions/2016/cr4685.pdf`).
 pip install -r requirements.txt      # -r requirements-ocr.txt for --ocr
 
 python collect_index.py --out decisions_index.jsonl   # what the Board published
-python extract.py ./decisions -o dab.jsonl           # PDF and HTML -> text
+python extract.py ./decisions -o dab.jsonl            # PDF and HTML -> text
 python build_dataset.py dab.jsonl --corpus dab -o out/
-python slice_jsonl.py dab.jsonl out/ --all           # -> 16 category slices
+python slice_jsonl.py dab.jsonl out/ --all            # -> 38 category slices
 python build_manifests.py --dir out/
+python link_corpora.py out/dab.parquet out/alj.parquet # who appealed what
 
 # what is published but missing, then fetch it
 python audit_completeness.py decisions_index.jsonl out/*.parquet
 python fetch_missing.py missing.jsonl --out-dir decisions/
+python fetch_via_browser.py missing.jsonl --out-dir decisions/   # needs your Chrome
 
-# anything published since the Archive last crawled: start Chrome yourself,
-# then attach to it (see fetch_via_browser.py)
-python fetch_via_browser.py missing_2026.jsonl --out-dir decisions/
-
-python verify.py decisions/                          # did we actually get them?
-python run_checks.py && python -m pytest tests/      # bug ledger + test suite
+python verify.py decisions/                           # did we actually get them?
+python run_checks.py && python -m pytest tests/
 ```
 
-`categories.yaml` holds the sixteen categories — pattern, description and legal
-citation in one table. Adding a category is a data edit; the slicer, the counter
-and the manifest all read from it, and a category missing any of the three is
-refused at load rather than shipping a slice with a blank legal basis.
+`categories.yaml` holds the 38 categories — pattern, description and legal
+citation in one table, and a category missing any of the three is refused at
+load. The rest divide up as `archive.py` (the Internet Archive), `extract.py`
+(files to text), `clean.py` (website furniture), `metadata.py` (the header),
+`fields.py` (the body), `label.py` (category membership), `jsonl.py` (record IO).
 
-The other modules divide up as: `archive.py` (everything that talks to the
-Internet Archive), `jsonl.py` (record IO), `extract.py` (files to text),
-`clean.py` (website furniture), `metadata.py` (the header), `label.py`
-(category membership).
-
-The corpora are not committed. `.gitignore` keeps `*.jsonl` and `*.parquet` out
-of the repo; 284 MB of JSONL becomes 53 MB of zstd Parquet, which is the
-difference between a dataset you can range-query over HTTP and one you have to
-download.
+The corpora are not committed; `.gitignore` keeps `*.jsonl` and `*.parquet` out.
 
 ## What the data doesn't tell you
 
-- **A 200 is not evidence of a decision.** The Akamai block, the Archive's own
-  miss page and a redirect to the section landing page all return 200 with a
-  full HTML skeleton and no decision in it. `verify.py` gives each fetched file
-  a named verdict — OK, CHALLENGE, ARCHIVE_MISS, NOT_A_DECISION, THIN, EMPTY —
-  so that checking is a command rather than something rewritten ad hoc each
-  time. CHALLENGE is a retry after re-solving in the browser, not missing data.
-- **The Archive lags.** Its most recent crawl of a page can be months old and
-  Save Page Now needs an account, so anything published since is reachable only
-  from a real browser — `fetch_via_browser.py`, attaching to a Chrome you start
-  yourself. `check_index.py` runs daily against a committed baseline and fails
-  if any division-year loses decisions, because a collector that quietly returns
-  less is the failure this repo keeps having.
-- **Completeness is measured, not assumed, and it is not total.** Every
-  decision the Board's index lists *and gives an identifiable number to* is in
-  the corpus. 307 of its 9,042 listings carry no parseable number and sit
-  outside that check entirely. `audit_completeness.py` runs the diff.
-- **A category label is a heuristic, not a reading.** `label.py` decides from
-  where a citation appears and how often, which is a much better proxy than a
-  substring match and is still a proxy. No precision or recall figure is claimed
-  anywhere, because there is no hand-labelled sample to compute one from.
-- **The slices are not a partition.** 1,393 of 9,228 decisions (15%) land in at
-  least one slice; 9 land in more than one; there is no residual category. Four
-  category/corpus pairs are empty, `samhsa_otp_cert` in both.
-- **A quarter of the corpus was captured from the web page, not the file.** The
-  HHS breadcrumb, the "official website" banner and the rest come with it — 19%
-  of Appellate Division and 42% of ALJ decisions. `clean.py` strips it.
-- **Some text layers are wrong rather than missing.** Three decisions extract to
-  about one character per page; DAB No. 88 (1980) extracts at normal length and
-  reads "Financisl", "yesr", "t:rsotee's". Only the first kind is detected.
-- **The disposition label is deliberately partial.** `dispositions` reads only
-  operative first-person phrasing out of the decision's own conclusion, so 43%
-  of Appellate and 23% of ALJ decisions carry one and the rest are empty. Empty
-  means "not stated unambiguously here", never "nothing happened", and a rate
-  over the labelled subset is a rate over a non-random subset.
-  `disposition_text` carries the conclusion verbatim so you can judge for
-  yourself. Exclusion periods are not parsed at all.
-- **`appealed_in` is a join, not a census.** An ALJ decision is linked when an
-  Appellate decision names it. An appeal that settled, was withdrawn, or is
-  pending produces no Appellate decision, so empty means "no Appellate decision
-  here names it", not "nobody appealed".
+- **A 200 is not evidence of a decision.** The block page, the Archive's miss
+  page and a redirect to the section landing page all return 200 with a full
+  HTML skeleton and nothing in it. `verify.py` gives every fetched file a named
+  verdict so that checking is a command rather than a habit.
+- **Completeness is measured, and it is not total.** All 8,897 index listings
+  that carry an identifiable decision number are here. The other 323 sit outside
+  that check entirely.
+- **Category labels and dispositions are heuristics.** No precision or recall is
+  claimed; there is no hand-labelled sample to compute one from. Dispositions
+  are empty on most decisions, and empty means "not stated unambiguously here".
+- **The slices are not a partition.** 6,061 of 9,391 decisions land in at least
+  one of 68; 1,357 land in more than one; there is no residual category.
+- **Some text is wrong rather than missing.** Three decisions extract to about
+  one character per page and are flagged. Others extract at normal length and
+  are garbled — DAB No. 88 (1980) reads "Financisl", "yesr" — and nothing
+  flags those.
 
-[LIMITATIONS.md](./LIMITATIONS.md) has the detail and the numbers.
-
-## How categories are assigned
-
-[METHODS.md](./METHODS.md). Short version: matching a citation anywhere in the
-full text answers a different question than the category name asks, because the
-Board's standing cite on documenting costs is a Head Start case, because
-decisions enumerate provisions they are not applying, and because petitioners
-cite provisions they then lose on. `label.py` blanks out case citations and
-requires the surviving matches to carry weight. Across the twenty-one slices
-that were published from a plain substring match, 889 records become 749.
+[LIMITATIONS.md](./LIMITATIONS.md) has the rest, with numbers.
 
 ## License
 
