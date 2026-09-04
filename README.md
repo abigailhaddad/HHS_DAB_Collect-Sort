@@ -6,9 +6,8 @@ Appellate Division reviews them. PDFs and HTML in, typed Parquet out, with the
 header and parts of the body parsed into columns and 38 category slices cut by
 legal basis.
 
-**This is a cleanup of [KMisener90/HHS_DAB_Collect-Sort](https://github.com/KMisener90/HHS_DAB_Collect-Sort)**,
-which assembled the original corpus and wrote the first version of the
-extraction and slicing scripts. That work is the reason this exists.
+A fork of [KMisener90/HHS_DAB_Collect-Sort](https://github.com/KMisener90/HHS_DAB_Collect-Sort),
+which collected the original corpus and wrote the first version of these scripts.
 
 | | decisions | span |
 |---|---|---|
