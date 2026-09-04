@@ -105,3 +105,34 @@ def test_every_marker_the_detector_finds_is_actually_removed():
     for s in samples:
         assert clean.has_chrome(s), s
         assert not clean.has_chrome(clean.clean(s)), f"survived cleaning: {s}"
+
+
+DOT_GOV_BLOCK = (
+    "William S. Strauss, M.D., DAB CR5411 (2019) | HHS.gov Here’s how you know "
+    "Official websites use .gov A .gov website belongs to an official government "
+    "organization in the United States. Secure .gov websites use HTTPS A lock ( "
+    "Lock A locked padlock ) or https:// means you've safely connected to the "
+    ".gov website. DECISION I sustain the determination of CMS."
+)
+SKIP_NAVIGATION = (
+    "1999.12.29 CR636 T.L.C. Mental Health Center vs. Health Care Financing "
+    "Administration Skip Navigation Decision No. CR 636 Department of Health and "
+    "Human Services DEPARTMENTAL APPEALS BOARD Civil Remedies Division"
+)
+
+
+def test_removes_the_dot_gov_reassurance_block():
+    # ~300 characters of boilerplate on every per-decision page from 2017.
+    assert clean.has_chrome(DOT_GOV_BLOCK)
+    out = clean.clean(DOT_GOV_BLOCK)
+    assert "locked padlock" not in out
+    assert "how you know" not in out
+    assert "I sustain the determination of CMS." in out
+
+
+def test_removes_the_older_skip_navigation():
+    # The 1999-2006 pages say "Skip Navigation", not "Skip to main content".
+    assert clean.has_chrome(SKIP_NAVIGATION)
+    out = clean.clean(SKIP_NAVIGATION)
+    assert "Skip Navigation" not in out
+    assert "Decision No. CR 636" in out

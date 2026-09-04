@@ -40,7 +40,10 @@ LINES = [
     # the surrounding text, so by the time they are reached they are mid-line.
     re.compile(r"Page sharing options", re.IGNORECASE),
     re.compile(r"Navigate to:", re.IGNORECASE),
+    # Both spellings: "Skip to main content" on the modern template, "Skip
+    # Navigation" on the 1999-2006 pages.
     re.compile(r"Skip\s*\n?\s*to\s*\n?\s*main\s*\n?\s*content", re.IGNORECASE),
+    re.compile(r"Skip\s+Navigation", re.IGNORECASE),
     # "| FOOTNOTES" is optional and the anchors are gone, so that this matches
     # exactly what MARKERS detects. They disagreed: the detector accepted
     # "CASE | DECISION | JUDGE" while the remover demanded the FOOTNOTES tab as
@@ -52,11 +55,30 @@ LINES = [
     re.compile(r"<\s*/[a-z0-9][^<>]{0,200}>", re.IGNORECASE),
 ]
 
+# The .gov reassurance block on the per-decision pages from 2017: about 300
+# characters of boilerplate on every one of them. One sentence per pattern
+# rather than one regex with optional groups -- written that way, the optional
+# groups matched empty and only the first sentence was ever removed.
+DOT_GOV_BLOCK = [
+    re.compile(r"Here.{0,3}s how you know", re.IGNORECASE),
+    re.compile(r"Official websites use\s*\.gov", re.IGNORECASE),
+    re.compile(r"A\s*\.gov website belongs to an official government "
+               r"organization in the United States\.?", re.IGNORECASE),
+    re.compile(r"Secure\s*\.gov websites use HTTPS", re.IGNORECASE),
+    re.compile(r"A lock \(\s*Lock\s*A locked padlock\s*\)\s*(?:or\s*)?"
+               r"(?:https://)?\s*"
+               r"(?:means you.{0,3}ve safely connected to the\s*\.gov website\.?)?",
+               re.IGNORECASE),
+]
+LINES = LINES + DOT_GOV_BLOCK
+
 MARKERS = re.compile(
     r"BreadcrumbHome|Breadcrumb\s*Home"
     r"|An official website of the United States government"
     r"|Skip\s*\n?\s*to\s*\n?\s*main\s*\n?\s*content"
     r"|Page sharing options"
+    r"|Skip\s+Navigation"
+    r"|Here.{0,3}s how you know"
     r"|CASE\s*\|\s*DECISION\s*\|\s*JUDGE"
     r"|\.\.\.\s*TO TOP",
     re.IGNORECASE,
