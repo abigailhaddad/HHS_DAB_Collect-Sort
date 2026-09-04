@@ -37,7 +37,7 @@ the other 85% are unsliced.
 
 ## The text-quality gate catches empty layers, not garbled ones
 
-`pdf_to_jsonl.py` gates on characters per page, which reliably catches a PDF
+`extract.py` gates on characters per page, which reliably catches a PDF
 that yielded nothing. Three decisions in the corpus extract at about one
 character per page and are effectively empty: DAB No. 2307 (Tennessee Department
 of Children's Services), DAB No. 2212 (Ocean Springs Nursing Center) and DAB No.

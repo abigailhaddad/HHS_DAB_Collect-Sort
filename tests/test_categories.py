@@ -47,3 +47,25 @@ def test_statutory_patterns_survive_a_hyphenated_line_break():
     b7 = categories.CATEGORIES["excl_b7_fraud_kickback"].regex
     assert b7.search("42 U.S.C. § 1320a- 7(b) (7)")
     assert b7.search("42 U.S.C. § 1320a-7(b)(7)")
+
+
+def test_the_table_loads_from_yaml_and_is_complete():
+    # The table is data now. A malformed entry must fail at load rather than
+    # reach the published manifest as a slice with a blank legal basis.
+    assert categories.CATEGORIES_FILE.exists()
+    assert len(categories.CATEGORIES) == 16
+
+
+def test_a_malformed_table_is_rejected(tmp_path):
+    import pytest
+    cases = {
+        "missing pattern": "categories:\n  x:\n    description: 'd'\n    citation: 'c'\n",
+        "blank description": "categories:\n  x:\n    description: ''\n    citation: 'c'\n    pattern: 'a'\n",
+        "bad regex": "categories:\n  x:\n    description: 'd'\n    citation: 'c'\n    pattern: '(unclosed'\n",
+        "empty table": "categories: {}\n",
+    }
+    for label, text in cases.items():
+        f = tmp_path / "c.yaml"
+        f.write_text(text)
+        with pytest.raises(SystemExit):
+            categories.load(f)

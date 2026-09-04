@@ -43,7 +43,7 @@ def corpus(tmp_path):
 
 
 def test_full_pipeline(corpus):
-    run(str(ROOT / "pdf_to_jsonl.py"), "pdfs", "-o", "alj.jsonl", cwd=corpus)
+    run(str(ROOT / "extract.py"), "pdfs", "-o", "alj.jsonl", cwd=corpus)
     records = [json.loads(l) for l in (corpus / "alj.jsonl").read_text().splitlines()]
     assert len(records) == 2
     good = next(r for r in records if "CR9999" in r["id"])
@@ -76,7 +76,7 @@ def test_full_pipeline(corpus):
 
 
 def test_metadata_survives_the_round_trip(corpus):
-    run(str(ROOT / "pdf_to_jsonl.py"), "pdfs", "-o", "alj.jsonl", cwd=corpus)
+    run(str(ROOT / "extract.py"), "pdfs", "-o", "alj.jsonl", cwd=corpus)
     run(str(ROOT / "build_dataset.py"), "alj.jsonl", "--corpus", "alj",
         "-o", "out", cwd=corpus)
     import pyarrow.parquet as pq

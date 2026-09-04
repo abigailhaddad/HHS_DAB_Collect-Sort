@@ -1,5 +1,5 @@
 """Text extraction. HHS publishes decisions as both HTML and PDF."""
-import pdf_to_jsonl as extract
+import extract
 
 DECISION_HTML = """<!doctype html><html><head><title>CR636</title>
 <style>.nav{color:red}</style>

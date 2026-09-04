@@ -19,7 +19,8 @@ import json
 import re
 import time
 import urllib.parse
-import urllib.request
+
+import archive
 from pathlib import Path
 
 BASE = "https://www.hhs.gov/about/agencies/dab/decisions"
@@ -29,10 +30,6 @@ DIVISIONS = {"alj": "alj-decisions", "dab": "board-decisions"}
 # exist before 1981, and asking the Archive for its 1974 index just burns the
 # retry budget.
 FIRST_YEAR = {"alj": 1981, "dab": 1974}
-AVAIL = "http://archive.org/wayback/available?url="
-CDX = ("http://web.archive.org/cdx/search/cdx?output=json&fl=timestamp"
-       "&filter=statuscode:200&limit=-1&url=")
-UA = {"User-Agent": "hhs-dab-collector (+https://github.com/KMisener90/HHS_DAB_Collect-Sort)"}
 
 # Decisions are linked three different ways depending on when they were
 # published, and a parser that knows only one returns an empty list for the
@@ -54,75 +51,13 @@ LINK = re.compile(
 SELF_LINK = re.compile(r"/(?:alj|board)-decisions/\d{4}/index\.html?$", re.IGNORECASE)
 
 
-def fetch(url: str, timeout: int = 20, tries: int = 3) -> str | None:
-    """GET with backoff on transient failures only.
-
-    The Archive rate-limits, and a single miss reads exactly like "this year was
-    never archived" -- which is how 2016 ALJ came back empty on one run and full
-    of 260 decisions on the next. So transient errors are retried.
-
-    A 404 is not retried. Retrying it turned every year a division did not
-    publish into minutes of backoff against a resource that will never exist,
-    and the collector spent its first six minutes on ALJ 1974-1980.
-    """
-    for attempt in range(tries):
-        try:
-            req = urllib.request.Request(url, headers=UA)
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read().decode("utf-8", "ignore")
-        except urllib.error.HTTPError as e:
-            if e.code in (403, 404, 410):
-                return None
-            if attempt == tries - 1:
-                return None
-            time.sleep(2 ** attempt)
-        except Exception:
-            if attempt == tries - 1:
-                return None
-            time.sleep(2 ** attempt)
-    return None
-
-
-def snapshot_url(page_url: str) -> str | None:
-    """Newest archived copy of a page, as raw bytes (the id_ modifier).
-
-    Two sources, because the availability API returns an empty
-    "archived_snapshots" object under load rather than an error, which is
-    indistinguishable from "never archived" -- 2016 ALJ came back empty on one
-    run and full of 260 decisions on the next. CDX is slower and does not lie.
-    """
-    quoted = urllib.parse.quote(page_url, safe="")
-    body = fetch(AVAIL + quoted)
-    if body:
-        try:
-            snap = (json.loads(body).get("archived_snapshots") or {}).get("closest")
-        except json.JSONDecodeError:
-            snap = None
-        if snap:
-            # /web/TIMESTAMP/ -> /web/TIMESTAMPid_/ returns the original bytes,
-            # not the Archive's page with its own navigation injected.
-            return re.sub(r"(/web/\d+)/", r"\1id_/", snap["url"], count=1)
-
-    body = fetch(CDX + quoted)
-    if not body or not body.strip():
-        return None
-    try:
-        rows = json.loads(body)
-    except json.JSONDecodeError:
-        return None
-    rows = rows[1:] if rows and rows[0][:1] == ["timestamp"] else rows
-    if not rows:
-        return None
-    return f"http://web.archive.org/web/{rows[-1][0]}id_/{page_url}"
-
-
 def parse_index(page: str, division: str, year: int) -> list[dict]:
     out, seen = [], set()
     for href, text in LINK.findall(page):
-        pdf = urllib.parse.urljoin(f"{BASE}/{DIVISIONS[division]}/{year}/", href)
-        if pdf in seen or SELF_LINK.search(pdf):
+        url = urllib.parse.urljoin(f"{BASE}/{DIVISIONS[division]}/{year}/", href)
+        if url in seen or SELF_LINK.search(url):
             continue
-        seen.add(pdf)
+        seen.add(url)
         caption = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html.unescape(text))).strip()
         # Captions render the number three ways: "CR4685", "DAB2740" (no "No."),
         # and "Decision No. 1550". Requiring "No." after DAB dropped every
@@ -140,7 +75,7 @@ def parse_index(page: str, division: str, year: int) -> list[dict]:
                           caption, re.IGNORECASE)
             return_no = None
             if not m:   # fall back to the slug: "board-dab-3027", "alj-cr5791"
-                m = re.search(r"/(?:board|alj)-((?:dab|cr)-?\d{1,5})/", pdf,
+                m = re.search(r"/(?:board|alj)-((?:dab|cr)-?\d{1,5})/", url,
                               re.IGNORECASE)
             if m:
                 return_no = re.sub(r"[\s.\-]|No", "", m.group(1),
@@ -153,7 +88,7 @@ def parse_index(page: str, division: str, year: int) -> list[dict]:
             "year": year,
             "decision_no": return_no,
             "caption": caption,
-            "url": pdf,
+            "url": url,
         })
     return out
 
@@ -172,9 +107,9 @@ def main() -> int:
         start = args.from_year or FIRST_YEAR[division]
         for year in range(start, args.to_year + 1):
             page_url = f"{BASE}/{DIVISIONS[division]}/{year}/index.html"
-            snap = snapshot_url(page_url)
+            snap = archive.snapshot_url(page_url)
             time.sleep(args.delay)
-            page = fetch(snap) if snap else None
+            page = archive.get_text(snap) if snap else None
             if not page:
                 missing.append(f"{division} {year}")
                 continue

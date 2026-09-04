@@ -187,19 +187,19 @@ check("metadata: year comes from the text, not the filename",
 # median is 1.5%, the 95th percentile is 4.5%, and the three highest-scoring
 # decisions are In re LCD Complaint cases dense with CPT codes and correctly
 # extracted. It rejected a clean synthetic decision on its first end-to-end run.
-import pdf_to_jsonl
+import extract
 
 DENSE_PAGE = ("I sustain the determination of CMS to revoke Petitioner's Medicare "
               "billing privileges under 42 C.F.R. section 424.535(a)(3) based on a "
               "felony conviction. ") * 12
 check("text_quality: a normal page passes",
-      pdf_to_jsonl.text_quality(DENSE_PAGE, 1)[0], True)
+      extract.text_quality(DENSE_PAGE, 1)[0], True)
 check("text_quality: abbreviation-dense text still passes",
-      pdf_to_jsonl.text_quality("CPT HCPCS LCD CMS NCD " * 200, 1)[0], True)
+      extract.text_quality("CPT HCPCS LCD CMS NCD " * 200, 1)[0], True)
 check("text_quality: empty layer fails",
-      pdf_to_jsonl.text_quality("   ", 3)[0], False)
+      extract.text_quality("   ", 3)[0], False)
 check("text_quality: one character per page fails",
-      pdf_to_jsonl.text_quality("x" * 12, 12)[0], False)
+      extract.text_quality("x" * 12, 12)[0], False)
 
 
 if failures:

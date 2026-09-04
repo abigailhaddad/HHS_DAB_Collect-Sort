@@ -1,6 +1,6 @@
 """Turn the extracted-text JSONL into a typed, queryable Parquet corpus.
 
-Reads the JSONL that pdf_to_jsonl.py produces, strips the website furniture,
+Reads the JSONL that extract.py produces, strips the website furniture,
 parses the header into filterable columns, and writes one Parquet file per
 corpus. Text compresses about 5x under zstd, which is the difference between a
 dataset you can range-query over HTTP and 284 MB of line-delimited JSON.
@@ -10,7 +10,6 @@ dataset you can range-query over HTTP and 284 MB of line-delimited JSON.
 from __future__ import annotations
 
 import argparse
-import json
 from datetime import date
 from pathlib import Path
 
@@ -18,6 +17,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 import clean
+import jsonl
 import metadata
 
 SCHEMA = pa.schema([
@@ -41,15 +41,14 @@ SCHEMA = pa.schema([
 
 def build(path: Path, corpus: str) -> pa.Table:
     rows = []
-    for line in path.open(encoding="utf-8"):
-        line = line.strip()
-        if not line:
-            continue                      # tolerate a trailing blank line
-        r = json.loads(line)
+    for r in jsonl.read(path):
         raw = r["text"]
         had_chrome = clean.has_chrome(raw)
         text, ok = clean.clean_guarded(raw)
-        meta = metadata.parse(raw, r["id"])
+        # parse() is given the cleaned text, not the raw. Passing raw made every
+        # record get cleaned twice -- once here and once inside parse -- and let
+        # the two copies drift apart if the guard ever behaved differently.
+        meta = metadata.parse(text, r["id"])
         rows.append({
             "id": r["id"],
             "corpus": corpus,

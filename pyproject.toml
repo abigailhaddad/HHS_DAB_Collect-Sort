@@ -6,17 +6,18 @@ requires-python = ">=3.10"
 dependencies = [
     "pypdf>=4.0",
     "pyarrow>=14.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-# Only needed for `pdf_to_jsonl.py --ocr`, which also wants the tesseract binary.
+# Only needed for `extract.py --ocr`, which also wants the tesseract binary.
 ocr = ["pymupdf>=1.24", "pytesseract>=0.3", "pillow>=10.0"]
 
 [tool.setuptools]
 py-modules = [
-    "build_dataset", "build_manifests", "categories", "categorize_counts",
-    "clean", "collect_index", "audit_completeness", "label", "metadata",
-    "pdf_to_jsonl", "slice_jsonl",
+    "archive", "audit_completeness", "build_dataset", "build_manifests",
+    "categories", "categorize_counts", "clean", "collect_index", "extract",
+    "fetch_missing", "jsonl", "label", "metadata", "slice_jsonl",
 ]
 
 [dependency-groups]

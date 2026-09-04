@@ -16,8 +16,9 @@ import json
 import re
 import sys
 from datetime import date
+from pathlib import Path
 
-import clean
+import jsonl
 
 MONTHS = {m.lower(): i for i, m in enumerate(
     ["January", "February", "March", "April", "May", "June", "July",
@@ -136,8 +137,10 @@ def _norm_no(raw: str) -> str:
 
 def parse(text: str, record_id: str = "") -> dict:
     """Pull header fields out of one decision. Missing fields come back None."""
-    body = clean.clean_guarded(text)[0]
-    head = body[:4000]                   # the header always sits in the first pages
+    # Cleaning is the caller's job (build_dataset does it once per record);
+    # running it again here doubled the work on every decision. Text that has
+    # not been cleaned still parses -- the header sits above the furniture.
+    head = text[:4000]                   # the header always sits in the first pages
 
     decision_no = None
     for rx in (DECISION_RE, DAB_NO_RE):
@@ -192,8 +195,7 @@ def main() -> int:
     fields = ["decision_no", "docket_nos", "decision_date", "tribunal", "respondent"]
     have = dict.fromkeys(fields, 0)
     n = mismatched_year = 0
-    for line in open(path, encoding="utf-8"):
-        r = json.loads(line)
+    for r in jsonl.read(Path(path)):
         meta = parse(r["text"], r["id"])
         n += 1
         for f in fields:

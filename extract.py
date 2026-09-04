@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Convert a folder of DAB/ALJ decisions into one JSONL per corpus.
 
-    python pdf_to_jsonl.py ./dab_pdfs -o dab.jsonl
-    python pdf_to_jsonl.py ./dab_pdfs -o dab.jsonl --ocr   # needs tesseract
+    python extract.py ./dab_pdfs -o dab.jsonl
+    python extract.py ./dab_pdfs -o dab.jsonl --ocr   # needs tesseract
 
 Both file types are read, because HHS publishes both: decisions to about 1999
 are HTML, later ones are PDF, and from 2017 each decision is a web page again.

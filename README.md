@@ -28,19 +28,28 @@ newer ones as PDF (`alj-decisions/2016/cr4685.pdf`).
 ```bash
 pip install -e .                                    # add [ocr] for --ocr
 
-python collect_index.py --out decisions_index.jsonl # what the Board published
-python pdf_to_jsonl.py ./dab_pdfs -o dab.jsonl      # decisions -> text
+python collect_index.py --out decisions_index.jsonl   # what the Board published
+python extract.py ./decisions -o dab.jsonl           # PDF and HTML -> text
 python build_dataset.py dab.jsonl --corpus dab -o out/
-python slice_jsonl.py dab.jsonl out/ --all          # -> 16 category slices
+python slice_jsonl.py dab.jsonl out/ --all           # -> 16 category slices
 python build_manifests.py --dir out/
-python audit_completeness.py decisions_index.jsonl out/*.parquet
 
-python run_checks.py                                # regression checks
+# what is published but missing, then fetch it
+python audit_completeness.py decisions_index.jsonl out/*.parquet
+python fetch_missing.py missing.jsonl --out-dir decisions/
+
+python run_checks.py && python -m pytest tests/     # bug ledger + test suite
 ```
 
-`categories.py` holds the sixteen categories — pattern, description and legal
-citation in one table. Adding a category means adding it there; the slicer, the
-counter and the manifest all read from it.
+`categories.yaml` holds the sixteen categories — pattern, description and legal
+citation in one table. Adding a category is a data edit; the slicer, the counter
+and the manifest all read from it, and a category missing any of the three is
+refused at load rather than shipping a slice with a blank legal basis.
+
+The other modules divide up as: `archive.py` (everything that talks to the
+Internet Archive), `jsonl.py` (record IO), `extract.py` (files to text),
+`clean.py` (website furniture), `metadata.py` (the header), `label.py`
+(category membership).
 
 The corpora are not committed. `.gitignore` keeps `*.jsonl` and `*.parquet` out
 of the repo; 284 MB of JSONL becomes 53 MB of zstd Parquet, which is the

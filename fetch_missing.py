@@ -19,7 +19,7 @@ A 200 is not evidence of success. Two ways this goes wrong here:
     redirects to the live site, which is the thing behind the 403. The response
     is a 403 page from HHS, delivered under an archive.org URL. The snapshot
     has to be addressed by its exact timestamp, which is what
-    collect_index.snapshot_url resolves.
+    archive.snapshot_url resolves.
   - The Archive serves its own HTML error page with a 200 status when it has no
     snapshot, and a truncated PDF is still a PDF.
 
@@ -34,13 +34,9 @@ import json
 import random
 import re
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
-import collect_index
-
-UA = collect_index.UA
+import archive
 
 MIN_PDF_BYTES = 2000
 MIN_HTML_BYTES = 1500
@@ -91,26 +87,9 @@ def out_name(rec: dict) -> str:
     return f"{rec['year']}_{Path(tail).stem}{ext}"
 
 
-def fetch(url: str, timeout: int = 60, tries: int = 5) -> bytes | None:
-    snap = collect_index.snapshot_url(url)
-    if not snap:
-        return None
-    for attempt in range(tries):
-        try:
-            req = urllib.request.Request(snap, headers=UA)
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read()
-        except urllib.error.HTTPError as e:
-            if e.code in (403, 404, 410):
-                return None
-            if attempt == tries - 1:
-                return None
-            time.sleep(2 ** attempt + random.uniform(0, 1))
-        except Exception:
-            if attempt == tries - 1:
-                return None
-            time.sleep(2 ** attempt + random.uniform(0, 1))
-    return None
+def fetch(url: str) -> bytes | None:
+    snap = archive.snapshot_url(url)
+    return archive.get(snap, timeout=60) if snap else None
 
 
 def main() -> int:
