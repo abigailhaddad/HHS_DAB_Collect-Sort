@@ -60,9 +60,8 @@ Repair needs the original PDFs, which are not in this repo either way.
 
 Both corpora hold every decision the Board's own year-by-year index lists and
 gives an identifiable number to: 8,897 of 8,897. `audit_completeness.py` runs
-that diff, and it is the reason the claim is checkable at all — the corpus is
-compared against the publisher's list rather than against a guess about which
-decision numbers ought to exist.
+that diff against the publisher's own list, rather than against a guess about
+which decision numbers ought to exist.
 
 The remaining 323 index listings carry no parseable decision number and sit
 outside the check entirely. They are mostly reconsideration decisions and
