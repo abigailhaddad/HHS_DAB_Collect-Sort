@@ -43,7 +43,8 @@ DAB_2016_INDEX = """
 def index_pages():
     return {"alj_2016": ALJ_2016_INDEX,
             "dab_1995": DAB_1995_INDEX,
-            "dab_2016": DAB_2016_INDEX}
+            "dab_2016": DAB_2016_INDEX,
+            "dab_2020": DAB_2020_INDEX}
 
 
 @pytest.fixture
@@ -55,3 +56,16 @@ def built_corpus():
         if files:
             return files
     return None
+
+
+# 2017 on: each decision gets its own page, so the filename is index.html and
+# only the directory identifies it.
+DAB_2020_INDEX = """
+<html><body>
+<a href="/about/agencies/dab/decisions/board-decisions/2020/index.html">2020</a>
+<a href="/about/agencies/dab/decisions/board-decisions/2020/board-dab-3027/index.html">
+  2020.12.29; DAB3027; Transnet Home Group</a>
+<a href="/about/agencies/dab/decisions/alj-decisions/2020/alj-cr5791/index.html">
+  2020.10.28 CR5791 Some Petitioner v. CMS</a>
+</body></html>
+"""

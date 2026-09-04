@@ -19,9 +19,18 @@ import pyarrow.parquet as pq
 
 
 def norm(no: str | None) -> str | None:
+    """Canonical decision number.
+
+    The index page and the decision itself do not agree on the prefix: a caption
+    reads "DAB2740" while the decision's own header reads "Decision No. 2740".
+    The CR prefix, by contrast, is present in both and distinguishes the two
+    series, so it is kept. Comparing the two raw made every Appellate decision
+    look missing.
+    """
     if not no:
         return None
     s = re.sub(r"[^A-Za-z0-9]", "", no).upper()
+    s = re.sub(r"^(?:DAB|DGAB|GAB|DECISION|NO)+", "", s)
     m = re.match(r"^(CR)?0*(\d+)$", s)
     return f"{m.group(1) or ''}{m.group(2)}" if m else s
 

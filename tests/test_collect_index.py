@@ -47,3 +47,16 @@ def test_first_year_bounds_are_set_per_division():
     # the collector spent six minutes on ALJ 1974-1980 before these existed.
     assert ci.FIRST_YEAR["alj"] > ci.FIRST_YEAR["dab"]
     assert set(ci.FIRST_YEAR) == set(ci.DIVISIONS)
+
+
+def test_parses_the_per_decision_page_era(index_pages):
+    # From 2017 the filename is index.html and only the directory names the
+    # decision. Rejecting every /index.html threw all of these away.
+    rows = ci.parse_index(index_pages["dab_2020"], "dab", 2020)
+    assert [r["decision_no"] for r in rows] == ["DAB3027", "CR5791"]
+    assert rows[0]["url"].endswith("/board-decisions/2020/board-dab-3027/index.html")
+
+
+def test_still_skips_the_year_index_in_the_new_era(index_pages):
+    rows = ci.parse_index(index_pages["dab_2020"], "dab", 2020)
+    assert not any(r["url"].endswith("/board-decisions/2020/index.html") for r in rows)
