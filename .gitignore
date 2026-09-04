@@ -1,0 +1,7 @@
+# Corpora and slices live on Hugging Face, not in git.
+*.jsonl
+*.parquet
+manifest_*.json
+out/
+__pycache__/
+.DS_Store
