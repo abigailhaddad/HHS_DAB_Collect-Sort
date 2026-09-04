@@ -1,0 +1,4 @@
+# Runtime. Versions are the ones the test suite is green against.
+pypdf==6.9.2          # PDF text layer
+pyarrow==23.0.1       # Parquet
+PyYAML==6.0.3         # categories.yaml

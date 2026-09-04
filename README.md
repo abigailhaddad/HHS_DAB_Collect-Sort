@@ -26,7 +26,7 @@ newer ones as PDF (`alj-decisions/2016/cr4685.pdf`).
 ## Running it
 
 ```bash
-pip install -e .                                    # add [ocr] for --ocr
+pip install -r requirements.txt      # -r requirements-ocr.txt for --ocr
 
 python collect_index.py --out decisions_index.jsonl   # what the Board published
 python extract.py ./decisions -o dab.jsonl           # PDF and HTML -> text

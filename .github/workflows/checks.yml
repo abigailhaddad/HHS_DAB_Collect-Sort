@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e . pytest pymupdf
+      - run: pip install -r requirements-dev.txt
       # run_checks.py is the ledger of bugs found by hand; tests/ covers module
       # contracts and the end-to-end run. Neither needs the corpus: the cases
       # carry their text inline and test_pipeline.py generates its own PDFs.
