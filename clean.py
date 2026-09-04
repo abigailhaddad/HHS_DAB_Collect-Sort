@@ -36,11 +36,17 @@ BLOCKS = [
 
 # Single lines / short runs, removed wherever they appear.
 LINES = [
-    re.compile(r"^\s*Page sharing options\s*$", re.MULTILINE | re.IGNORECASE),
-    re.compile(r"^\s*Navigate to:\s*$", re.MULTILINE | re.IGNORECASE),
+    # Not anchored to a line. Removing the breadcrumb above joins these onto
+    # the surrounding text, so by the time they are reached they are mid-line.
+    re.compile(r"Page sharing options", re.IGNORECASE),
+    re.compile(r"Navigate to:", re.IGNORECASE),
     re.compile(r"Skip\s*\n?\s*to\s*\n?\s*main\s*\n?\s*content", re.IGNORECASE),
-    re.compile(r"^\s*CASE\s*\|\s*DECISION\s*\|\s*JUDGE\s*\|\s*FOOTNOTES\s*$",
-               re.MULTILINE | re.IGNORECASE),
+    # "| FOOTNOTES" is optional and the anchors are gone, so that this matches
+    # exactly what MARKERS detects. They disagreed: the detector accepted
+    # "CASE | DECISION | JUDGE" while the remover demanded the FOOTNOTES tab as
+    # well, so 21 decisions were correctly flagged as dirty and then not cleaned.
+    re.compile(r"CASE\s*\|\s*DECISION\s*\|\s*JUDGE(?:\s*\|\s*FOOTNOTES)?",
+               re.IGNORECASE),
     re.compile(r"\.\.\.\s*TO TOP", re.IGNORECASE),
     # Residual bare links the breadcrumb pattern didn't swallow.
     re.compile(r"<\s*/[a-z0-9][^<>]{0,200}>", re.IGNORECASE),
@@ -75,9 +81,26 @@ def clean(text: str) -> str:
     return text.strip()
 
 
-# A record is at most a few KB of furniture. Anything past this is a runaway
-# pattern eating the decision, so the original is kept and flagged instead.
-GUARD_MAX_REMOVED = 0.25
+# Two thresholds, because one does not work at both ends. The furniture is
+# bounded -- the largest legitimate removal in the corpus is 2,972 characters --
+# so anything past GUARD_MAX_CHARS is a pattern eating the decision. But a short
+# order can be a third furniture by volume and still be cleaned correctly, which
+# is why proportion alone is wrong: it kept the chrome on the very records that
+# had the most of it.
+GUARD_MAX_CHARS = 6000
+GUARD_MAX_SHARE = 0.60
+
+
+def _visible(text: str) -> int:
+    """Length ignoring whitespace.
+
+    The guard has to measure content, not characters. clean() also collapses
+    the space padding PDF layout leaves behind, and on a heavily padded decision
+    that alone runs to thousands of characters -- DAB No. 2783 and DAB No. 2814
+    each shed about 7,000 characters of pure whitespace and were held back as
+    runaway removals when nothing had been removed at all.
+    """
+    return len(re.sub(r"\s+", "", text))
 
 
 def clean_guarded(text: str) -> tuple[str, bool]:
@@ -90,6 +113,8 @@ def clean_guarded(text: str) -> tuple[str, bool]:
     if not text.strip():
         return text, True
     out = clean(text)
-    if len(out) < len(text) * (1 - GUARD_MAX_REMOVED):
+    before, after = _visible(text), _visible(out)
+    removed = before - after
+    if removed > GUARD_MAX_CHARS or removed > before * GUARD_MAX_SHARE:
         return text, False
     return out, True

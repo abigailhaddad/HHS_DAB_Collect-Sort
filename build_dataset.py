@@ -32,6 +32,7 @@ SCHEMA = pa.schema([
     ("num_pages", pa.int32()),
     ("num_chars", pa.int32()),
     ("had_web_chrome", pa.bool_()),
+    ("text_layer_ok", pa.bool_()),
     ("clean_guard_tripped", pa.bool_()),
     ("filename_year_disagrees", pa.bool_()),
     ("text", pa.string()),
@@ -63,6 +64,9 @@ def build(path: Path, corpus: str) -> pa.Table:
             "num_pages": r.get("num_pages"),
             "num_chars": len(text),
             "had_web_chrome": had_chrome,
+            # Carried through from extraction: three decisions in the corpus
+            # yield about one character per page. Downstream needs to know.
+            "text_layer_ok": r.get("text_layer_ok", True),
             "clean_guard_tripped": not ok,
             "filename_year_disagrees": bool(
                 meta["decision_date"] and meta["filename_year"]

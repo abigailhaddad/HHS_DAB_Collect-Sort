@@ -24,6 +24,11 @@ from pathlib import Path
 
 BASE = "https://www.hhs.gov/about/agencies/dab/decisions"
 DIVISIONS = {"alj": "alj-decisions", "dab": "board-decisions"}
+# First year each division published. Probing outside these costs two failed
+# lookups per year and returns nothing: the Civil Remedies Division did not
+# exist before 1981, and asking the Archive for its 1974 index just burns the
+# retry budget.
+FIRST_YEAR = {"alj": 1981, "dab": 1974}
 AVAIL = "http://archive.org/wayback/available?url="
 CDX = ("http://web.archive.org/cdx/search/cdx?output=json&fl=timestamp"
        "&filter=statuscode:200&limit=-1&url=")
@@ -41,15 +46,28 @@ LINK = re.compile(
 SELF_LINK = re.compile(r"/index\.html?$", re.IGNORECASE)
 
 
-def fetch(url: str, timeout: int = 60, tries: int = 4) -> str | None:
-    """GET with backoff. The Archive rate-limits, and a single miss reads
-    exactly like "this year was never archived" -- which is how 2016 ALJ came
-    back empty on one run and full on the next."""
+def fetch(url: str, timeout: int = 20, tries: int = 3) -> str | None:
+    """GET with backoff on transient failures only.
+
+    The Archive rate-limits, and a single miss reads exactly like "this year was
+    never archived" -- which is how 2016 ALJ came back empty on one run and full
+    of 260 decisions on the next. So transient errors are retried.
+
+    A 404 is not retried. Retrying it turned every year a division did not
+    publish into minutes of backoff against a resource that will never exist,
+    and the collector spent its first six minutes on ALJ 1974-1980.
+    """
     for attempt in range(tries):
         try:
             req = urllib.request.Request(url, headers=UA)
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return r.read().decode("utf-8", "ignore")
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 404, 410):
+                return None
+            if attempt == tries - 1:
+                return None
+            time.sleep(2 ** attempt)
         except Exception:
             if attempt == tries - 1:
                 return None
@@ -117,14 +135,16 @@ def parse_index(page: str, division: str, year: int) -> list[dict]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path("decisions_index.jsonl"))
-    ap.add_argument("--from-year", type=int, default=1974)
+    ap.add_argument("--from-year", type=int, default=None,
+                    help="override the per-division first year")
     ap.add_argument("--to-year", type=int, default=2026)
     ap.add_argument("--delay", type=float, default=1.0)
     args = ap.parse_args()
 
     rows, missing = [], []
     for division in DIVISIONS:
-        for year in range(args.from_year, args.to_year + 1):
+        start = args.from_year or FIRST_YEAR[division]
+        for year in range(start, args.to_year + 1):
             page_url = f"{BASE}/{DIVISIONS[division]}/{year}/index.html"
             snap = snapshot_url(page_url)
             time.sleep(args.delay)

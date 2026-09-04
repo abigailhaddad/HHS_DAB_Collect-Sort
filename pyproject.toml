@@ -18,3 +18,9 @@ py-modules = [
     "clean", "collect_index", "audit_completeness", "label", "metadata",
     "pdf_to_jsonl", "slice_jsonl",
 ]
+
+[dependency-groups]
+dev = ["pytest>=8.0", "pymupdf>=1.24"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

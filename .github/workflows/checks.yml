@@ -12,7 +12,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -e .
-      # run_checks.py holds a case for every bug found by hand. It needs no
-      # data: the cases carry the decision text they test inline.
+      - run: pip install -e . pytest pymupdf
+      # run_checks.py is the ledger of bugs found by hand; tests/ covers module
+      # contracts and the end-to-end run. Neither needs the corpus: the cases
+      # carry their text inline and test_pipeline.py generates its own PDFs.
+      # tests/test_data.py skips unless a built corpus is present.
       - run: python run_checks.py
+      - run: python -m pytest tests/ -q
