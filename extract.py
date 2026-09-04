@@ -64,6 +64,32 @@ _BLOCK_TAG = re.compile(rf"</?(?:{_BLOCK})\b[^>]*>", re.I)
 _ANY_TAG = re.compile(r"<[^>]+>")
 
 
+# A content region has to actually contain a decision. Taking <article>
+# unconditionally means a page where that element exists but holds something
+# else -- a promo card, an empty shell -- silently yields a few hundred
+# characters instead of the decision, and nothing downstream can tell that from
+# a genuinely short order. Borrowed from the selector cascade in utah's
+# extract_section_text, which requires a candidate to clear a length floor
+# before it wins.
+MIN_REGION_CHARS = 500
+
+
+def _content_region(body: str) -> str:
+    """First region that yields enough text wins; else the whole document.
+
+    Greedy to the LAST closing tag: a non-greedy match stops at the first
+    nested </article> and truncates the decision.
+    """
+    for rx in (_ARTICLE, _MAIN):
+        m = rx.search(body)
+        if not m:
+            continue
+        candidate = m.group(1)
+        if len(_ANY_TAG.sub("", candidate).strip()) >= MIN_REGION_CHARS:
+            return candidate
+    return body
+
+
 def extract_html(path: Path) -> tuple[str, int]:
     """Text from an HTML decision. Page count is unknown, so it is 0.
 
@@ -86,13 +112,7 @@ def extract_html(path: Path) -> tuple[str, int]:
     m = _PAGE_TITLE.search(body)
     if m:
         title = m.group(1)
-    # Greedy to the LAST closing tag: a non-greedy match stops at the first
-    # nested </article>, truncating the decision.
-    for rx in (_ARTICLE, _MAIN):
-        m = rx.search(body)
-        if m:
-            body = m.group(1)
-            break
+    body = _content_region(body)
 
     body = _BLOCK_TAG.sub("\n", title + "\n" + body)
     body = _ANY_TAG.sub("", body)

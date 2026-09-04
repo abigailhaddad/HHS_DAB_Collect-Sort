@@ -86,3 +86,32 @@ def test_block_tags_still_separate_their_contents():
     assert "C-99-733Decision" not in text
     # Inline emphasis inside a sentence must not lose its spaces either.
     assert "Petitioner VITAS Healthcare Corporation appealed." in " ".join(text.split())
+
+
+def test_a_thin_content_region_is_not_preferred_over_the_document():
+    # <article> exists but holds a promo card, not the decision. Taking it
+    # unconditionally yields a few hundred characters and nothing downstream
+    # can tell that from a genuinely short order.
+    import tempfile, pathlib
+    html = ("<html><body><article><p>Share this page</p></article>"
+            "<div>Department of Health and Human Services DEPARTMENTAL APPEALS "
+            "BOARD Civil Remedies Division. " + "The decision text continues. " * 60
+            + "</div></body></html>")
+    f = pathlib.Path(tempfile.mkstemp(suffix=".html")[1])
+    f.write_text(html, encoding="utf-8")
+    text, _ = extract.extract_text(f)
+    assert "DEPARTMENTAL APPEALS BOARD" in text
+    assert len(text) > extract.MIN_REGION_CHARS
+
+
+def test_a_real_article_region_is_still_preferred():
+    import tempfile, pathlib
+    html = ("<html><body><nav>Breadcrumb Home About HHS Agencies</nav>"
+            "<article>Department of Health and Human Services DEPARTMENTAL "
+            "APPEALS BOARD. " + "The decision text continues. " * 60 +
+            "</article><footer>Contact Us HHS Headquarters</footer></body></html>")
+    f = pathlib.Path(tempfile.mkstemp(suffix=".html")[1])
+    f.write_text(html, encoding="utf-8")
+    text, _ = extract.extract_text(f)
+    assert "DEPARTMENTAL APPEALS BOARD" in text
+    assert "HHS Headquarters" not in text
