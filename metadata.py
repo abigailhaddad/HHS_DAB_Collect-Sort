@@ -150,33 +150,57 @@ def _to_date(mon: str, day: str, year: str) -> str | None:
 # and without it the ruling fell through to the header parse, which picked a
 # number out of the body: four different rulings came back as 1771.
 FILENAME_RULING = re.compile(
-    r"(?:ALJ\s*)?RUL(?:ING)?[\s.,;_-]*(?:No\.?[\s]*)?(\d{4}-\d{1,3})",
+    r"(?:ALJ\s*)?RUL(?:ING)?[\s.,;_-]*(?:No\.?\s*)?(\d{4}-\d{1,3})",
     re.IGNORECASE)
 # The trailing R is part of the number: CR10R is the decision on reconsideration
-# of CR10, a different document. Dropping it merged the two.
-FILENAME_NO = re.compile(r"(DAB|CR)[\s;,._-]*0*(\d{1,5}R?)\b", re.IGNORECASE)
+# of CR10, a different document. Dropping it merged the two. This also reads
+# "Decision No. 1550" as well as "DAB1550" and "CR4685". No leading \b: in
+# "2004.07.08CR1196" the digit and the C are both word characters.
+FILENAME_NO = re.compile(
+    r"(DAB|CR|Decision\s+No\.?|No\.)[\s;,._-]*0*(\d{1,5}R?)\b", re.IGNORECASE)
+
+
+def decision_no_from_text(fragment: str) -> str | None:
+    """The decision number named in a short fragment -- a filename or a caption.
+
+    One implementation for both, because they diverged: the index-caption
+    version required a word boundary before "CR", which never matches in
+    "2004.07.08CR1196" (digit and C are both word characters); it required
+    "Ruling No." where captions also write "ALJ Ruling 2013-2"; and it dropped
+    the R suffix that distinguishes CR10R from CR10. Those three between them
+    left 394 published decisions with no identifier at all.
+
+    Measured against the 8,246-decision corpus this also beats parsing the
+    header: 98% coverage for the Appellate Division against 99% for the text,
+    but 35 numbers shared by more than one decision against 132. OCR mangles
+    the label in the older scans -- "Decis ion No. 33", "recision No. 146" --
+    and a failed parse then picks up a citation to some other decision, which
+    is how 28 different decisions all came back as number 436.
+    """
+    if not fragment:
+        return None
+    m = FILENAME_RULING.search(fragment)
+    if m:
+        return "RULING" + m.group(1)
+    m = FILENAME_NO.search(fragment)
+    if not m:
+        return None
+    label = re.sub(r"[\s.]", "", m.group(1)).upper()
+    prefix = "CR" if label == "CR" else ""
+    no = f"{prefix}{m.group(2).upper()}"
+    # A bare four-digit number after a naked "No." is a year far more often
+    # than a decision -- "ALJ Ruling No. 2014-17" reduced to 2014 that way.
+    # The guard applies only to that weakest form: DAB No. 2024 and Decision
+    # No. 2016 are real Appellate decisions, and rejecting every number in
+    # 1974-2026 cost 137 of them.
+    if label == "NO" and re.fullmatch(r"(?:19|20)\d\d", no):
+        return None
+    return no
 
 
 def decision_no_from_id(record_id: str) -> str | None:
-    """Read the decision number out of the source filename.
-
-    Measured against the 8,246-decision corpus this beats parsing the header:
-    98% coverage for the Appellate Division against 99% for the text, but 35
-    numbers shared by more than one decision against 132. OCR mangles the label
-    in the older scans -- "Decis ion No. 33", "recision No. 146" -- and a failed
-    parse then picks up a citation to some other decision, which is how 28
-    different decisions all came back as number 436.
-    """
-    if not record_id:
-        return None
-    m = FILENAME_RULING.search(record_id)
-    if m:
-        return "RULING" + m.group(1)
-    m = FILENAME_NO.search(record_id)
-    if not m:
-        return None
-    prefix = "CR" if m.group(1).upper() == "CR" else ""
-    return f"{prefix}{m.group(2).upper()}"
+    """The decision number in a source filename."""
+    return decision_no_from_text(record_id)
 
 
 def _norm_no(raw: str) -> str:

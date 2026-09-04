@@ -21,6 +21,7 @@ import time
 import urllib.parse
 
 import archive
+import metadata
 from pathlib import Path
 
 BASE = "https://www.hhs.gov/about/agencies/dab/decisions"
@@ -52,28 +53,17 @@ SELF_LINK = re.compile(r"/(?:alj|board)-decisions/\d{4}/index\.html?$", re.IGNOR
 
 
 def decision_no_from_caption(caption: str, url: str = "") -> str | None:
-    """The decision number a listing gives, from its caption or failing that
-    its URL slug.
+    """The decision number a listing gives, from its caption or its URL slug.
 
-    Order matters. ALJ Rulings are a separate series captioned "ALJ Ruling No.
-    2014-17", and the generic "No. NNNN" branch reads that as decision number
-    2014 -- which collapsed all 23 of a year's rulings onto one identifier.
+    Delegates to metadata.decision_no_from_text so the index and the corpus
+    identify decisions the same way. They did not, and the differences were all
+    in the index's favour of being wrong.
     """
-    m = re.search(r"\bALJ\s+Ruling\s+No\.?\s*(\d{4}-\d{1,3})\b", caption,
-                  re.IGNORECASE)
-    if m:
-        return "RULING" + m.group(1)
-
-    m = re.search(r"\b(CR\s?\d{1,5}|DAB\s?(?:No\.?\s?)?\d{1,5}"
-                  r"|Decision\s+No\.?\s?\d{1,5}|No\.\s?\d{1,5})\b",
-                  caption, re.IGNORECASE)
-    if not m and url:   # fall back to the slug: "board-dab-3027", "alj-cr5791"
-        m = re.search(r"/(?:board|alj)-((?:dab|cr)-?\d{1,5})/", url, re.IGNORECASE)
-    if not m:
-        return None
-    no = re.sub(r"[\s.\-]|No", "", m.group(1), flags=re.I).upper()
-    # A bare four-digit number in a caption is a year, not a decision.
-    return None if re.fullmatch(r"(?:19|20)\d\d", no) else no
+    no = metadata.decision_no_from_text(caption)
+    if no:
+        return no
+    m = re.search(r"/(?:board|alj)-((?:dab|cr)-?\d{1,5}R?)/", url, re.IGNORECASE)
+    return metadata.decision_no_from_text(m.group(1)) if m else None
 
 
 def parse_index(page: str, division: str, year: int) -> list[dict]:

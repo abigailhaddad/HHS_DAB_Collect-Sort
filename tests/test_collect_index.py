@@ -15,14 +15,16 @@ def test_parses_the_html_era(index_pages):
     # empty list for every one of those years, which looks like a clean result.
     rows = ci.parse_index(index_pages["dab_1995"], "dab", 1995)
     assert len(rows) == 2
-    assert [r["decision_no"] for r in rows] == ["DAB1550", "DAB1549"]
+    # Bare number for the Appellate series, "CR" kept for Civil Remedies --
+    # the same shape the corpus stores, so the two join without a translation.
+    assert [r["decision_no"] for r in rows] == ["1550", "1549"]
     assert rows[0]["url"].endswith("/board-decisions/1995/dab1550.html")
 
 
 def test_parses_a_dab_number_without_the_word_no(index_pages):
     # Captions render it "DAB2740". Requiring "No." nulled every one of them.
     rows = ci.parse_index(index_pages["dab_2016"], "dab", 2016)
-    assert rows[0]["decision_no"] == "DAB2740"
+    assert rows[0]["decision_no"] == "2740"
 
 
 def test_skips_the_pages_own_navigation(index_pages):
@@ -53,7 +55,7 @@ def test_parses_the_per_decision_page_era(index_pages):
     # From 2017 the filename is index.html and only the directory names the
     # decision. Rejecting every /index.html threw all of these away.
     rows = ci.parse_index(index_pages["dab_2020"], "dab", 2020)
-    assert [r["decision_no"] for r in rows] == ["DAB3027", "CR5791"]
+    assert [r["decision_no"] for r in rows] == ["3027", "CR5791"]
     assert rows[0]["url"].endswith("/board-decisions/2020/board-dab-3027/index.html")
 
 
@@ -84,3 +86,23 @@ def test_a_bare_year_is_never_a_decision_number():
             '2014/alj2014-99.pdf">2014.01.02 Some Order No. 2014 concerning X</a>')
     rows = ci.parse_index(page, "alj", 2014)
     assert rows[0]["decision_no"] is None
+
+
+def test_caption_and_filename_agree_on_the_same_decision():
+    # These were two implementations and diverged. The caption side required a
+    # word boundary before "CR" (never true in "2004.07.08CR1196"), demanded
+    # "Ruling No." where captions also write "ALJ Ruling 2013-2", and dropped
+    # the R suffix -- 394 published decisions ended up with no identifier.
+    import metadata
+    for fragment in ("2004.07.08CR1196 Alden-Princeton Rehabilitation",
+                     "1988.05.02 CR10R The Inspector General v. Frank P. Silver",
+                     "2012.12.13. ALJ Ruling 2013-2 Willow Tree Nursing Center",
+                     "1995.11.27 DAB1550 Neil R. Hirsch, M.D."):
+        assert ci.decision_no_from_caption(fragment) == \
+               metadata.decision_no_from_text(fragment), fragment
+
+
+def test_the_previously_unidentifiable_captions_now_parse():
+    assert ci.decision_no_from_caption("2004.07.08CR1196 Alden-Princeton") == "CR1196"
+    assert ci.decision_no_from_caption("1988.05.02 CR10R The Inspector General") == "CR10R"
+    assert ci.decision_no_from_caption("2012.12.13. ALJ Ruling 2013-2 Willow Tree") == "RULING2013-2"

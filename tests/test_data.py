@@ -65,15 +65,29 @@ def test_dates_agree_with_years(table):
 
 
 def test_decision_numbers_are_well_formed(table):
-    bad = [n for n in col(table, "decision_no")
-           if n is not None and not re.fullmatch(r"(CR)?\d{1,5}", n)]
+    # Three series: Appellate ("2740"), Civil Remedies ("CR4685"), and the ALJ
+    # Rulings ("RULING2013-2"). A trailing R marks a decision on
+    # reconsideration -- CR10R is not CR10.
+    ok = re.compile(r"(?:CR)?\d{1,5}R?|RULING\d{4}-\d{1,3}")
+    bad = [n for n in col(table, "decision_no") if n is not None and not ok.fullmatch(n)]
     assert not bad, f"malformed decision numbers: {bad[:5]}"
 
 
 def test_alj_numbers_carry_the_cr_prefix(table):
     for corpus, no in zip(col(table, "corpus"), col(table, "decision_no")):
         if corpus == "alj" and no is not None and no.startswith("CR"):
-            assert no[2:].isdigit()
+            assert re.fullmatch(r"\d{1,5}R?", no[2:]), no
+
+
+def test_decision_numbers_are_unique_within_a_corpus(table):
+    # They were not: OCR-mangled headers put 28 Appellate decisions under number
+    # 436, and re-fetching decisions the corpus already had duplicated 251 more.
+    import collections
+    for corpus in set(col(table, "corpus")):
+        nos = [n for n, c in zip(col(table, "decision_no"), col(table, "corpus"))
+               if c == corpus and n]
+        dupes = [k for k, v in collections.Counter(nos).items() if v > 1]
+        assert not dupes, f"{corpus}: duplicate decision numbers {dupes[:5]}"
 
 
 def test_docket_numbers_are_never_the_word_and(table):
