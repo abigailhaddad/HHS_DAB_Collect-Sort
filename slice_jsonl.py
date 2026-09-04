@@ -22,18 +22,25 @@ import categories
 import label
 
 
-def slice_corpus(records, category) -> list[dict]:
-    out = []
+def slice_corpora(records, wanted) -> dict[str, list[dict]]:
+    """Cut every requested category in one pass over the records.
+
+    Normalizing the text and scanning it for citations is per-document work, not
+    per-category work, and it is the expensive part. Doing it inside a per
+    category loop repeated it once for each of the sixteen categories.
+    """
+    out = {name: [] for name in wanted}
     for rec in records:
         doc = label.Prepared(rec["text"])
-        member, ev = label.label(doc, category.regex)
-        if not member:
-            continue
-        out.append({**rec,
-                    "category": category.name,
-                    "match_count": ev["n_matches"],
-                    "matches_in_citations": ev["n_in_citation"],
-                    "first_match_char": ev["first_match_char"]})
+        for name in wanted:
+            member, ev = label.label(doc, categories.CATEGORIES[name].regex)
+            if not member:
+                continue
+            out[name].append({**rec,
+                              "category": name,
+                              "match_count": ev["n_matches"],
+                              "matches_in_citations": ev["n_in_citation"],
+                              "first_match_char": ev["first_match_char"]})
     return out
 
 
@@ -61,8 +68,9 @@ def main() -> int:
     records = list(read_jsonl(args.input))
     corpus = args.input.stem
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    sliced = slice_corpora(records, names)
     for name in names:
-        rows = slice_corpus(records, categories.CATEGORIES[name])
+        rows = sliced[name]
         out = args.out_dir / f"{corpus}_{name}.jsonl"
         with out.open("w", encoding="utf-8") as f:
             for r in rows:

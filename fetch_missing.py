@@ -44,6 +44,13 @@ UA = collect_index.UA
 
 MIN_PDF_BYTES = 2000
 MIN_HTML_BYTES = 1500
+
+
+def min_bytes(name: str) -> int:
+    """The floor for a file of this type. Applying the PDF floor to HTML made
+    any 1,500-1,999 byte page fail the resume check forever: it was written,
+    then judged too small to count, then fetched again on every run."""
+    return MIN_PDF_BYTES if name.lower().endswith(".pdf") else MIN_HTML_BYTES
 # The Archive says this with a 200.
 ARCHIVE_ERROR = re.compile(
     rb"Wayback Machine has not archived|Got an HTTP \d+ response|"
@@ -68,13 +75,20 @@ def is_good(body: bytes, url: str) -> tuple[bool, str]:
 
 
 def out_name(rec: dict) -> str:
-    """A stable filename that keeps the decision number and the extension."""
+    """A collision-free filename: the year plus the source file's own stem.
+
+    Naming by decision number collides. 114 of the missing records are ALJ
+    Rulings, a separate series whose captions read "ALJ Ruling No. 2014-17";
+    every one of those parsed to the bare year, so 23 different rulings all
+    wanted the name "2014_2014.pdf" and 22 of them would have been silently
+    dropped by the resume check. The source stem is unique per URL -- verified
+    across all 1,566 -- and the year keeps the directory readable.
+    """
     tail = rec["url"].rstrip("/").split("/")[-1]
     if tail.lower().startswith("index."):          # per-decision page directory
         tail = rec["url"].rstrip("/").split("/")[-2] + ".html"
-    no = rec.get("decision_no") or Path(tail).stem
     ext = Path(tail).suffix.lower() or ".html"
-    return f"{rec['year']}_{no}{ext}"
+    return f"{rec['year']}_{Path(tail).stem}{ext}"
 
 
 def fetch(url: str, timeout: int = 60, tries: int = 5) -> bytes | None:
@@ -123,7 +137,7 @@ def main() -> int:
     with failures.open("a", encoding="utf-8") as flog:
         for i, rec in enumerate(records, 1):
             dest = args.out_dir / out_name(rec)
-            if dest.exists() and dest.stat().st_size > MIN_PDF_BYTES:
+            if dest.exists() and dest.stat().st_size >= min_bytes(dest.name):
                 skipped += 1
                 continue
             body = fetch(rec["url"])

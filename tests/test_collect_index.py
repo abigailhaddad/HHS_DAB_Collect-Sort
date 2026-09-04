@@ -60,3 +60,27 @@ def test_parses_the_per_decision_page_era(index_pages):
 def test_still_skips_the_year_index_in_the_new_era(index_pages):
     rows = ci.parse_index(index_pages["dab_2020"], "dab", 2020)
     assert not any(r["url"].endswith("/board-decisions/2020/index.html") for r in rows)
+
+
+ALJ_RULING_INDEX = """
+<html><body>
+<a href="/sites/default/files/static/dab/decisions/alj-decisions/2014/alj2014-17.pdf">
+  2013.12.13 ALJ Ruling No. 2014-17 Lynda L. Hook v. The Inspector General</a>
+<a href="/sites/default/files/static/dab/decisions/alj-decisions/2014/alj2014-16.pdf">
+  2013.12.06 ALJ Ruling No. 2014-16 CTP v. Guevara LLC</a>
+</body></html>
+"""
+
+
+def test_alj_rulings_are_not_numbered_by_their_year():
+    # "ALJ Ruling No. 2014-17" hit the generic "No. NNNN" branch and parsed as
+    # decision 2014, so all 23 of a year's rulings shared one identifier.
+    rows = ci.parse_index(ALJ_RULING_INDEX, "alj", 2014)
+    assert [r["decision_no"] for r in rows] == ["RULING2014-17", "RULING2014-16"]
+
+
+def test_a_bare_year_is_never_a_decision_number():
+    page = ('<a href="/sites/default/files/static/dab/decisions/alj-decisions/'
+            '2014/alj2014-99.pdf">2014.01.02 Some Order No. 2014 concerning X</a>')
+    rows = ci.parse_index(page, "alj", 2014)
+    assert rows[0]["decision_no"] is None

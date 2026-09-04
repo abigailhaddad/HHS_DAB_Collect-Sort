@@ -90,6 +90,14 @@ RESPONDENTS = [
 ]
 
 
+# Words that appear in a decision header and are close enough to a month name
+# for difflib to accept them. "Decision" scores against "December", which turned
+# "Decision 3 1978" into 3 December 1978.
+NOT_MONTHS = {"decision", "decisions", "december3", "docket", "dockets",
+              "department", "departmental", "division", "subject", "appeals",
+              "appellate", "remedies", "medicare", "medicaid", "petitioner"}
+
+
 def _month(raw: str) -> int | None:
     """Month number from a possibly OCR-damaged name.
 
@@ -100,7 +108,7 @@ def _month(raw: str) -> int | None:
     that way.
     """
     m = re.sub(r"[^a-z]", "", raw.lower())
-    if not m:
+    if not m or m in NOT_MONTHS:
         return None
     m = MONTH_FIXES.get(m, m)
     if m in MONTHS:

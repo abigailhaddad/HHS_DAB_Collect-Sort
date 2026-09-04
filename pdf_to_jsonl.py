@@ -42,17 +42,50 @@ def extract_pdf(pdf_path: Path) -> tuple[str, int]:
     return "\n".join(pages), len(reader.pages)
 
 
+# Whole elements whose text is never part of a decision.
+_DROP_ELEMENTS = re.compile(
+    r"<(script|style|nav|header|footer|aside|form|noscript)\b.*?</\1\s*>",
+    re.S | re.I)
+# The decision itself. From 2017 HHS renders it inside <article>, with the case
+# caption in the page title above it.
+_ARTICLE = re.compile(r"<article\b[^>]*>(.*)</article\s*>", re.S | re.I)
+_MAIN = re.compile(r"<main\b[^>]*>(.*)</main\s*>", re.S | re.I)
+_PAGE_TITLE = re.compile(r'<h1[^>]*class="[^"]*page-title[^"]*"[^>]*>(.*?)</h1>',
+                         re.S | re.I)
+_BLOCK_END = re.compile(r"<br\s*/?>|</p>|</div>|</tr>|</h\d>|</li>", re.I)
+
+
 def extract_html(path: Path) -> tuple[str, int]:
     """Text from an HTML decision. Page count is unknown, so it is 0.
 
-    Script and style bodies are dropped whole -- their contents are not text on
-    the page, and a JSON blob of analytics config left in would be indexed as if
-    it were part of the decision. The site furniture that survives tag-stripping
-    is clean.py's problem, not this function's.
+    The content region is selected from the markup rather than the navigation
+    being matched out of the text afterwards. On the 2017-on template the page
+    is 207 KB of which the decision is 22 KB; tag-stripping the whole document
+    leaves the breadcrumb, the mega-menu, the newsroom promos and the footer
+    sitting in the text as ordinary prose, where nothing downstream can tell
+    them from the decision -- clean.py cannot help, because its breadcrumb
+    pattern keys on the "</about/agencies>" link markup that tag-stripping has
+    already removed.
+
+    Older templates have no <article> or <main>; those fall through to the whole
+    document, which is what they were always parsed as.
     """
     raw = path.read_bytes().decode("utf-8", "replace")
-    body = re.sub(r"<(script|style)\b.*?</\1\s*>", " ", raw, flags=re.S | re.I)
-    body = re.sub(r"<br\s*/?>|</p>|</div>|</tr>|</h\d>", "\n", body, flags=re.I)
+    body = _DROP_ELEMENTS.sub(" ", raw)
+
+    title = ""
+    m = _PAGE_TITLE.search(body)
+    if m:
+        title = m.group(1)
+    # Greedy to the LAST closing tag: a non-greedy match stops at the first
+    # nested </article>, truncating the decision.
+    for rx in (_ARTICLE, _MAIN):
+        m = rx.search(body)
+        if m:
+            body = m.group(1)
+            break
+
+    body = _BLOCK_END.sub("\n", title + "\n" + body)
     body = re.sub(r"<[^>]+>", " ", body)
     return html_mod.unescape(body), 0
 

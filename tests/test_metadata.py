@@ -114,3 +114,14 @@ def test_a_dangling_connective_is_not_a_docket():
     m = metadata.parse("HCFA disallowed $11,881,983 in Docket No.\n84-228, and "
                        "$1,032,130 in Docket No. 85-25.\n")
     assert m["docket_nos"] == ["84-228"]
+
+
+def test_header_words_do_not_fuzzy_match_a_month():
+    # difflib scored "Decision" against "December", so an unlabelled header
+    # reading "Decision 3 1978" parsed as 3 December 1978.
+    assert metadata._month("Decision") is None
+    assert metadata._month("Department") is None
+    assert metadata.parse("Appellate Division\nDecision 3 1978\n")["decision_date"] is None
+    # Real OCR damage must still resolve.
+    assert metadata._month("Nay") == 5
+    assert metadata._month("Harch") == 3
