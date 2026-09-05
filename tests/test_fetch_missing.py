@@ -52,3 +52,18 @@ def test_resume_floor_is_per_type():
     # resume check on every run.
     assert fm.min_bytes("2002_cr853.html") < fm.MIN_PDF_BYTES
     assert fm.min_bytes("1989_cr18.pdf") == fm.MIN_PDF_BYTES
+
+
+def test_a_query_string_never_reaches_the_filename():
+    # Path(".../alj-cr5002.pdf?language=en").suffix is ".pdf?language=en", so
+    # the file lands with an extension no suffix filter matches and the
+    # extractor skips it silently.
+    rec = {"year": 2017, "decision_no": "CR5002", "division": "alj",
+           "url": "https://www.hhs.gov/sites/default/files/alj-cr5002.pdf?language=en"}
+    assert fm.out_name(rec) == "2017_alj-cr5002.pdf"
+
+
+def test_a_fragment_is_stripped_too():
+    rec = {"year": 2017, "decision_no": "CR1", "division": "alj",
+           "url": "https://www.hhs.gov/sites/default/files/alj-cr1.pdf#page=2"}
+    assert fm.out_name(rec) == "2017_alj-cr1.pdf"

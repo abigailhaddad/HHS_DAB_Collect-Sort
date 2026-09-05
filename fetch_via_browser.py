@@ -43,7 +43,11 @@ MIN_BYTES = 5000
 
 
 def out_name(rec: dict) -> str:
-    tail = rec["url"].rstrip("/").split("/")[-1]
+    # Strip the query string before anything else. The 2017-18 URLs end
+    # "...alj-cr5002.pdf?language=en", and Path().suffix on that is
+    # ".pdf?language=en" -- so the file saved with an extension no suffix
+    # filter matches, and extract.py skipped 232 of them without a word.
+    tail = rec["url"].rstrip("/").split("/")[-1].split("?", 1)[0].split("#", 1)[0]
     if tail.lower().startswith("index."):
         tail = rec["url"].rstrip("/").split("/")[-2] + ".html"
     ext = Path(tail).suffix.lower() or ".html"
