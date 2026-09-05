@@ -21,6 +21,7 @@ import time
 import urllib.parse
 
 import archive
+import jsonl
 import metadata
 from pathlib import Path
 
@@ -93,28 +94,45 @@ def main() -> int:
     ap.add_argument("--delay", type=float, default=1.0)
     args = ap.parse_args()
 
-    rows, missing = [], []
+    rows, unfetched = [], []
     for division in DIVISIONS:
         start = args.from_year or FIRST_YEAR[division]
         for year in range(start, args.to_year + 1):
             page_url = f"{BASE}/{DIVISIONS[division]}/{year}/index.html"
-            snap = archive.snapshot_url(page_url)
-            time.sleep(args.delay)
-            page = archive.get_text(snap) if snap else None
-            if not page:
-                missing.append(f"{division} {year}")
+            found = None
+            # A year page that exists always lists decisions, so a parse of zero
+            # is a failure and not a fact. Retrying separates the two: the
+            # Archive dropped ALJ 1989 on one run and served all 46 on the next,
+            # and recorded as a zero that reads exactly like a year in which the
+            # Board published nothing.
+            for attempt in range(2):
+                snap = archive.snapshot_url(page_url)
+                time.sleep(args.delay)
+                page = archive.get_text(snap) if snap else None
+                if page:
+                    found = parse_index(page, division, year)
+                    if found:
+                        break
+                time.sleep(args.delay)
+            if not found:
+                unfetched.append(f"{division}:{year}")
+                print(f"{division} {year}: NOT COLLECTED", flush=True)
                 continue
-            found = parse_index(page, division, year)
             rows.extend(found)
             print(f"{division} {year}: {len(found)}", flush=True)
-            time.sleep(args.delay)
 
-    with args.out.open("w", encoding="utf-8") as f:
-        for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    jsonl.write(args.out, rows)
+    # A sidecar, so that a year nobody could fetch is distinguishable downstream
+    # from a year with no decisions in it. Without this, check_index.py reads a
+    # failed fetch as decisions having been lost.
+    meta = args.out.with_suffix(".meta.json")
+    meta.write_text(json.dumps({"unfetched": sorted(unfetched),
+                                "decisions": len(rows)}, indent=2) + "\n",
+                    encoding="utf-8")
     print(f"\n{len(rows)} decisions listed -> {args.out}")
-    if missing:
-        print(f"no archived index for: {', '.join(missing)}")
+    if unfetched:
+        print(f"{len(unfetched)} division-year(s) could not be fetched and are "
+              f"recorded in {meta.name}: {', '.join(unfetched)}")
     return 0
 
 

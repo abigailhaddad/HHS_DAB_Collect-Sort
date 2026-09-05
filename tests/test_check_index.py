@@ -45,3 +45,23 @@ def test_the_committed_baseline_matches_the_committed_index_shape():
     assert baseline
     assert all(":" in k and isinstance(v, int) and v > 0 for k, v in baseline.items())
     assert {k.split(":")[0] for k in baseline} == {"alj", "dab"}
+
+
+def test_an_unfetched_year_is_unknown_not_lost():
+    # The Archive dropped ALJ 1989 on one run and served all 46 on the next.
+    # Counted as zero, one flaky request reads as "46 decisions lost" and fails
+    # the daily job; the year has to be excluded, not counted.
+    lost, gained = check_index.compare({"alj:1989": 46}, {}, unfetched={"alj:1989"})
+    assert not lost and not gained
+
+
+def test_a_year_that_was_fetched_and_shrank_still_fails():
+    lost, _ = check_index.compare({"alj:1989": 46}, {"alj:1989": 3},
+                                  unfetched={"dab:1975"})
+    assert lost == ["alj:1989: 46 -> 3 (-43)"]
+
+
+def test_unfetched_does_not_suppress_other_years():
+    lost, _ = check_index.compare({"alj:1989": 46, "dab:2020": 30},
+                                  {"dab:2020": 0}, unfetched={"alj:1989"})
+    assert lost == ["dab:2020: 30 -> 0 (-30)"]
