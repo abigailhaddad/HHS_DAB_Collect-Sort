@@ -61,6 +61,21 @@ removed after it rejected a clean decision on the first end-to-end run.
 
 Repair needs the original PDFs, which are not in this repo either way.
 
+## The Council file is a selection, not a series
+
+The Appellate and ALJ corpora are complete against a published index. The
+Medicare Appeals Council is not, and the gap is large rather than marginal.
+
+HHS posts only "certain significant decisions and actions ... selected for
+posting". Its own Medicare Appeals Backlog primer puts the Council's annual
+adjudication capacity at about 2,600 appeals in FY2016, and about 2,300 at the
+end of FY2015 against a pending workload over 14,000. This corpus holds 224
+Council decisions spanning 2001 to 2015 — roughly a percent of a single
+decade's output, and there is no published docket index to measure it against.
+
+Nothing derived from the Council file should be read as describing what the
+Council decides. It describes what the Board chose to publish.
+
 ## Completeness is measured against the index, and is not total
 
 Both corpora hold every decision the Board's own year-by-year index lists and

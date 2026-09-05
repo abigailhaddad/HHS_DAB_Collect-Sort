@@ -130,11 +130,15 @@ files are two levels of the same tribunal and can be joined on
 {rows_md}
 
 The Appellate and ALJ corpora are complete against the Board's own published
-index: {complete}. **The Council file is different**: the Board posts only
+index: {complete}. **The Council file is different, and by a wide margin**: the Board posts only
 "certain significant decisions and actions ... selected for posting since they
-involve the adjudication of issues that may be of interest", so it is a curated
-compendium with no published denominator to check against, and a count over it
-is not a count of what the Council decided.
+involve the adjudication of issues that may be of interest". For scale, HHS put
+the Council's annual adjudication capacity at roughly 2,600 appeals in FY2016
+and 2,300 at the end of FY2015, against a pending workload above 14,000
+([Medicare Appeals Backlog primer](https://kffhealthnews.org/wp-content/uploads/sites/8/2016/06/medicare-appeals-backlog-primer.pdf)).
+This file holds 224 decisions spanning 2001 to 2015 — on the order of a
+percent of one decade's output. It is a selection of significant decisions, and
+a count over it is not a count of what the Council decided.
 
 Derived from [Kmisener/HHS-DAB-Decisions](https://huggingface.co/datasets/Kmisener/HHS-DAB-Decisions),
 which collected and text-extracted the original corpus. This adds the decisions
