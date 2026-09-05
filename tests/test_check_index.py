@@ -83,3 +83,21 @@ def test_update_keeps_the_previous_count_for_an_unfetched_year(tmp_path):
     after = json.loads(base.read_text())
     assert after["alj:1989"] == 46          # preserved, not zeroed
     assert after["dab:2020"] == 1
+
+
+def test_the_run_summary_names_what_changed(tmp_path, monkeypatch):
+    # A green run nobody opens is the same as no run, so gains have to land
+    # somewhere a reader sees: the job summary and a workflow annotation.
+    out = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(out))
+    check_index.summary({"alj:2017": 232}, {"alj:2017": 0},
+                        gained=["alj:2017: 0 -> 232 (+232)"], lost=[],
+                        unfetched={"dab:1975"})
+    text = out.read_text()
+    assert "gained decisions" in text and "alj:2017" in text
+    assert "not fetched" in text and "dab:1975" in text
+
+
+def test_the_summary_is_a_no_op_outside_actions(monkeypatch):
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    check_index.summary({}, {}, [], [], set())   # must not raise

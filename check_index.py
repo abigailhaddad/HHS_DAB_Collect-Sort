@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -51,6 +52,34 @@ def compare(baseline: dict[str, int], now: dict[str, int],
         if is_now > was:
             gained.append(f"{key}: {was} -> {is_now} (+{is_now - was})")
     return lost, gained
+
+
+def summary(now: dict[str, int], baseline: dict[str, int], gained: list[str],
+            lost: list[str], unfetched: set[str]) -> None:
+    """Write the run's findings where a scheduled job's reader will see them."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    total, was = sum(now.values()), sum(baseline.values())
+    lines = ["## Published index", "",
+             f"**{total:,} decisions listed** across {len(now)} division-years "
+             f"(baseline {was:,}).", ""]
+    if gained:
+        lines += [f"### {len(gained)} division-year(s) gained decisions", ""]
+        lines += [f"- `{g}`" for g in gained] + [""]
+    if lost:
+        lines += [f"### {len(lost)} division-year(s) LOST decisions", "",
+                  "The Board does not unpublish decisions, so this is the "
+                  "collector breaking.", ""]
+        lines += [f"- `{l}`" for l in lost] + [""]
+    if unfetched:
+        lines += [f"### {len(unfetched)} division-year(s) not fetched", "",
+                  "Not counted either way.", ""]
+        lines += [f"- `{u}`" for u in sorted(unfetched)] + [""]
+    if not (gained or lost or unfetched):
+        lines += ["No change.", ""]
+    with open(path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines))
 
 
 def main() -> int:
@@ -100,6 +129,10 @@ def main() -> int:
         print(f"\n{len(gained)} division-year(s) gained decisions:")
         for g in gained:
             print(f"  {g}")
+        # An annotation shows on the run page; a line of stdout does not, and a
+        # green run nobody opens is the same as no run.
+        for g in gained:
+            print(f"::notice title=New decisions published::{g}")
     if lost:
         print(f"\n{len(lost)} division-year(s) LOST decisions -- the collector is "
               f"probably broken, not the Board:", file=sys.stderr)
@@ -108,6 +141,7 @@ def main() -> int:
         return 1
     if not gained:
         print("no change")
+    summary(now, baseline, gained, lost, unfetched)
     return 0
 
 

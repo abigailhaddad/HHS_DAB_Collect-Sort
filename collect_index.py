@@ -31,7 +31,10 @@ DIVISIONS = {"alj": "alj-decisions", "dab": "board-decisions"}
 # lookups per year and returns nothing: the Civil Remedies Division did not
 # exist before 1981, and asking the Archive for its 1974 index just burns the
 # retry budget.
-FIRST_YEAR = {"alj": 1981, "dab": 1974}
+# The Civil Remedies Division's first decision is CR1, 1985. Probing 1981-84
+# cost two failed lookups a year and put four permanent entries in the
+# "could not fetch" list, where they read like a collection problem.
+FIRST_YEAR = {"alj": 1985, "dab": 1974}
 
 # Decisions are linked three different ways depending on when they were
 # published, and a parser that knows only one returns an empty list for the
