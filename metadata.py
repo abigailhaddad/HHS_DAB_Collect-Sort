@@ -70,11 +70,19 @@ DOCKET_SEP = r"\s*(?:,\s*and\s+|,\s*|\s+and\s+)"
 # alphanumeric, so without this "Docket No. 84-228, and $1,032,130 in..."
 # captures the trailing "and" as a docket -- the run has to end on a real one.
 DOCKET_TOKEN = r"(?!and\b|or\b)[A-Za-z0-9][A-Za-z0-9\-‐-―]*"
+# "Docket No.", "Docket Nos." and -- on 146 of the 224 Council decisions --
+# "Docket Number:".
 DOCKET_RE = re.compile(
-    rf"docket\s+nos?\.?\s*({DOCKET_TOKEN}(?:{DOCKET_SEP}{DOCKET_TOKEN})*)",
+    rf"docket\s+(?:nos?\.?|numbers?:?)\s*"
+    rf"({DOCKET_TOKEN}(?:{DOCKET_SEP}{DOCKET_TOKEN})*)",
     re.IGNORECASE)
 
 TRIBUNALS = [
+    # The Council before the divisions: its decisions carry the Board's
+    # letterhead too, so a division match would win on a Council decision.
+    ("Medicare Appeals Council", re.compile(
+        r"medicare\s+appeals\s+council|departmental\s+appeals\s+board\s*,?\s*"
+        r"medicare\s+operations\s+division", re.I)),
     ("Civil Remedies Division", re.compile(r"civil\s+remedies\s+division", re.I)),
     ("Appellate Division", re.compile(r"appellate\s+division", re.I)),
     # Pre-1987 the whole body was the Grant Appeals Board; "DGAB"/"GAB Decision"

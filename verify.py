@@ -49,6 +49,7 @@ ARCHIVE_MISS_MARKERS = ("wayback machine has not archived", "got an http",
 DECISION_MARKERS = re.compile(
     r"DEPARTMENTAL\s+APPEALS\s+BOARD|DEPARTMENTAL\s+GRANT\s+APPEALS\s+BOARD|"
     r"Civil\s+Remedies\s+Division|Appellate\s+Division|Grant\s+Appeals\s+Board|"
+    r"Medicare\s+Appeals\s+Council|"
     r"\b(?:D?GAB|DAB)\s+D\w*ecision\s*\d|"
     r"\bDAB\s+No\.?\s*\d|\bDecision\s+No\.?\s*(?:CR)?\s*\d", re.I)
 

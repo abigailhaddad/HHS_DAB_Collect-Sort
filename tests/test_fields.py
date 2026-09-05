@@ -45,11 +45,19 @@ def test_disposition_text_is_the_conclusion_verbatim():
         "For the reasons stated above, we affirm the ALJ Decision."
 
 
-def test_disposition_text_is_none_without_a_conclusion_heading():
-    # Falling back to the tail would return a signature block that reads like a
-    # conclusion without being one.
+def test_disposition_text_is_none_with_neither_heading_nor_sign_off():
+    assert fields.disposition_text("We consider the arguments at length.") is None
+
+
+def test_the_passage_before_a_sign_off_is_offered_but_not_labelled():
+    # disposition_text widened to the passage before the signature block, so
+    # that Council decisions -- which state the holding in running text and
+    # never write "Conclusion" -- are covered at all. The passage is offered
+    # verbatim; it is dispositions() that decides whether it says anything
+    # operative, and here it does not.
     text = "We consider the arguments.\n\n/s/ Francis D. DeGeorge\nPanel Chairman\n"
-    assert fields.disposition_text(text) is None
+    assert "We consider the arguments." in fields.disposition_text(text)
+    assert fields.dispositions(text) == []
 
 
 def test_disposition_text_is_not_a_label():
@@ -102,3 +110,26 @@ def test_asking_to_affirm_is_not_an_affirmance():
 
 def test_no_conclusion_means_no_disposition():
     assert fields.dispositions("We consider the arguments.\n\n/s/ A Judge\n") == []
+
+
+def test_council_judges_sign_as_administrative_appeals_judges():
+    text = ("The ALJ's decision is reversed.\nMEDICARE APPEALS COUNCIL\n"
+            "/s/ Clausen J. Krzywicki\nAdministrative Appeals Judge\n"
+            "/s/ Gilde B. Morrisson\nAdministrative Appeals Judge\nDate: April 22, 2011")
+    got = fields.judges(text)
+    assert set(got) == {"Clausen J. Krzywicki", "Gilde B. Morrisson"}
+
+
+def test_a_holding_stated_before_the_signature_block_is_found():
+    # Council decisions have no conclusion heading; they state the holding in
+    # running text and sign off. The signature block bounds it.
+    text = ("The ALJ found the services non-covered. We disagree.\n"
+            "The ALJ's decision is reversed.\nMEDICARE APPEALS COUNCIL\n"
+            "/s/ Clausen J. Krzywicki\nAdministrative Appeals Judge\n")
+    assert "decision is reversed" in fields.disposition_text(text)
+    assert fields.dispositions(text) == ["reversed"]
+
+
+def test_a_signature_block_alone_is_still_no_disposition():
+    assert fields.dispositions("We consider the arguments at length.\n"
+                               "/s/ A Judge\nAdministrative Law Judge\n") == []

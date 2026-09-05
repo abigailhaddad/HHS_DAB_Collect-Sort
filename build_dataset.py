@@ -109,7 +109,7 @@ def build(path: Path, corpus: str) -> pa.Table:
 def main() -> int:
     ap = argparse.ArgumentParser(description="JSONL -> typed Parquet corpus")
     ap.add_argument("input", type=Path)
-    ap.add_argument("--corpus", required=True, choices=["dab", "alj"])
+    ap.add_argument("--corpus", required=True, choices=["dab", "alj", "council"])
     ap.add_argument("-o", "--out-dir", type=Path, default=Path("out"))
     args = ap.parse_args()
 

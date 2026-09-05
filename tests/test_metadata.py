@@ -140,3 +140,19 @@ def test_filename_numbers():
     assert f("2005.01.25RUL2005-1 Oklahoma Health Care Authority") == "RULING2005-1"
     assert f("2012.07.17ALJRUL 2012-1 Douglas L. Clore v. CMS") == "RULING2012-1"
     assert f("a caption with no number") is None
+
+
+def test_the_council_is_recognised_before_the_divisions():
+    # Council decisions carry the Board's letterhead too, so a division match
+    # would otherwise win on them.
+    m = metadata.parse("Department of Health and Human Services\n"
+                       "DEPARTMENTAL APPEALS BOARD\nMedicare Appeals Council\n"
+                       "In the case of W.K.\nDocket No. M-11-2450\n")
+    assert m["tribunal"] == "Medicare Appeals Council"
+
+
+def test_docket_number_spelled_out():
+    # The Council writes "Docket Number:"; requiring "No." parsed 1 of 224.
+    m = metadata.parse("DECISION OF MEDICARE APPEALS COUNCIL\n"
+                       "Docket Number: M-10-1171\nIn the case of Montefiore\n")
+    assert m["docket_nos"] == ["M-10-1171"]

@@ -52,7 +52,8 @@ _NAME = r"[A-Z][A-Za-z.\-']+(?:[^\S\n]+[A-Z][A-Za-z.\-']*[A-Za-z.\-'])" \
         r"{1,3}"
 TITLE_AFTER = re.compile(
     rf"\n[^\S\n]*({_NAME})[^\S\n]*\n[^\S\n]*"
-    r"(?:Administrative Law Judge|(?:Presiding )?Board Member|Panel Chairman)",
+    r"(?:Administrative Law Judge|Administrative Appeals Judge"
+    r"|(?:Presiding )?Board Member|Panel Chairman|Chair\b)",
     re.MULTILINE)
 SIGNATURE = re.compile(rf"/s/[_\s]*\n?[^\S\n]*({_NAME})")
 NAMED_ALJ = re.compile(rf"Administrative Law Judge[^\S\n]+({_NAME})")
@@ -67,6 +68,16 @@ CONCLUSION = re.compile(r"(?:^|\n)[^\S\n]*(?:[IVX]+\.?[^\S\n]*)?"
                         r"(?:Conclusion and Order|Conclusion|ORDER)\b[.:]?"
                         r"[^\S\n]*\n", re.IGNORECASE)
 CONCLUSION_MAX = 1200
+
+# Council decisions carry no conclusion heading: they state the holding in
+# running text and then sign off. The signature block is a structural anchor
+# for where that holding ends, so the passage before it is the operative one --
+# which is not the same as falling back to the tail of the document, and gets
+# the Council from 3 labelled decisions out of 224 to something usable.
+SIGN_OFF = re.compile(
+    r"\n\s*(?:MEDICARE APPEALS COUNCIL|DEPARTMENTAL APPEALS BOARD)?\s*\n?\s*/s/",
+    re.IGNORECASE)
+SIGN_OFF_LOOKBACK = 900
 
 
 def _norm(text: str) -> str:
@@ -155,12 +166,20 @@ def dispositions(text: str) -> list[str]:
 def disposition_text(text: str) -> str | None:
     """The decision's own concluding passage, verbatim. Not a label.
 
-    None when the decision has no conclusion heading, rather than falling back
-    to the tail of the document -- the tail is usually a signature block, and
-    returning it would look like a conclusion without being one.
+    The conclusion heading where there is one, and otherwise the passage
+    immediately before the signature block -- which is a structural bound on
+    where the holding ends, not the tail of the document. Without that second
+    case the Council is uncoverable: it states the holding in running text and
+    never writes "Conclusion", and 3 of its 224 decisions got a label.
+
+    The passage is offered verbatim whether or not it says anything operative;
+    dispositions() is what decides that.
     """
     matches = list(CONCLUSION.finditer(text))
-    if not matches:
-        return None
-    span = text[matches[-1].end():]
-    return _norm(span)[:CONCLUSION_MAX] or None
+    if matches:
+        return _norm(text[matches[-1].end():])[:CONCLUSION_MAX] or None
+    sign = list(SIGN_OFF.finditer(text))
+    if sign:
+        start = max(0, sign[-1].start() - SIGN_OFF_LOOKBACK)
+        return _norm(text[start:sign[-1].start()]) or None
+    return None

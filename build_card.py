@@ -25,6 +25,7 @@ import jsonl
 CORPUS_LABEL = {
     "dab": "Appellate Division, and the Grant Appeals Board before it",
     "alj": "Civil Remedies Division (ALJs)",
+    "council": "Medicare Appeals Council — a curated selection, see below",
 }
 
 
@@ -51,20 +52,21 @@ def corpus_stats(path: Path) -> dict:
 
 
 def render(out_dir: Path, index_path: Path | None) -> str:
-    stats = {c: corpus_stats(out_dir / f"{c}.parquet") for c in ("dab", "alj")}
+    present = [c for c in CORPUS_LABEL if (out_dir / f"{c}.parquet").exists()]
+    stats = {c: corpus_stats(out_dir / f"{c}.parquet") for c in present}
     total = sum(s["rows"] for s in stats.values())
 
-    listed = numbered = present = 0
+    listed = numbered = found = 0
     if index_path and index_path.exists():
         rows = list(jsonl.read(index_path))
         listed = len(rows)
         for r in rows:
             no = r.get("decision_no")
-            if not no:
+            if not no or r["division"] not in stats:
                 continue
             numbered += 1
             if no in stats[r["division"]]["numbers"]:
-                present += 1
+                found += 1
 
     slice_line = ""
     sp = out_dir / "slices.parquet"
@@ -86,12 +88,12 @@ def render(out_dir: Path, index_path: Path | None) -> str:
 
     rows_md = "\n".join(
         f"| `{c}.parquet` | {CORPUS_LABEL[c]} | {stats[c]['rows']:,} | "
-        f"{stats[c]['first']} – {stats[c]['last']} |" for c in ("dab", "alj"))
+        f"{stats[c]['first']} – {stats[c]['last']} |" for c in present)
     if slice_line:
         rows_md += "\n" + slice_line
 
     complete = (f"of the {listed:,} listings on its year-by-year index pages, all "
-                f"{present:,} of the {numbered:,} that carry an identifiable decision "
+                f"{found:,} of the {numbered:,} that carry an identifiable decision "
                 f"number are here; the other {listed - numbered:,} sit outside the check"
                 ) if listed else "not measured in this build"
 
@@ -127,7 +129,12 @@ files are two levels of the same tribunal and can be joined on
 |---|---|---|---|
 {rows_md}
 
-Complete against the Board's own published index: {complete}.
+The Appellate and ALJ corpora are complete against the Board's own published
+index: {complete}. **The Council file is different**: the Board posts only
+"certain significant decisions and actions ... selected for posting since they
+involve the adjudication of issues that may be of interest", so it is a curated
+compendium with no published denominator to check against, and a count over it
+is not a count of what the Council decided.
 
 Derived from [Kmisener/HHS-DAB-Decisions](https://huggingface.co/datasets/Kmisener/HHS-DAB-Decisions),
 which collected and text-extracted the original corpus. This adds the decisions
