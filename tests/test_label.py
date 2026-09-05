@@ -63,6 +63,35 @@ def test_recurrence_carries_a_late_first_mention():
     assert label.label(text, B6)[0]
 
 
+def test_a_statute_named_before_a_quoted_in_cite_is_a_known_weak_spot():
+    """A limitation, pinned so a change to it is visible.
+
+    The blanking pattern covers `Party, Reporter No. N (Year)`. It does not
+    reach backwards over a subsection named just before such a cite, as in a
+    decision quoting a Federal Register notice that itself cites the provision.
+    On real decisions the opening-window rule usually catches this -- Frugia,
+    DAB No. 2736, is excluded from excl_b7_fraud_kickback for that reason -- but
+    on a short passage the whole text is the opening window and it is not.
+    """
+    text = ('in accordance with section 1128(b)(7) of the Social Security Act." '
+            '62 Fed. Reg. 67,392 (Dec. 24, 1997) (quoted in Keith Michael '
+            'Everman, D.C., DAB No. 1880, at 7 (2003).')
+    ev = label.evidence(text, B7)
+    assert ev["n_matches"] == 1 and ev["n_in_citation"] == 0
+    # Documented, not fixed: widening the pattern to reach this shape risks
+    # blanking the operative text, which is the more expensive mistake.
+    assert label.is_member(ev) is True
+
+
+def test_the_same_passage_deep_in_a_real_decision_is_not_membership():
+    # What actually protects the corpus: past the opening window a lone mention
+    # inside quoted material does not carry.
+    text = BODY + ('in accordance with section 1128(b)(7) of the Act." 62 Fed. '
+                   'Reg. 67,392 (quoted in Keith Michael Everman, D.C., DAB No. '
+                   '1880, at 7 (2003).')
+    assert not label.label(text, B7)[0]
+
+
 def test_citation_only_matches_are_reported_separately():
     text = ("quoted in Keith Michael Everman, D.C., DAB No. 1880, at 7 (2003), "
             "construing section 1128(b)(7).")

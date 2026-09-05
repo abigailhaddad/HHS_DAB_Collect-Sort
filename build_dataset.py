@@ -47,9 +47,29 @@ SCHEMA = pa.schema([
 ])
 
 
-def build(path: Path, corpus: str) -> pa.Table:
+def index_lookup(index: Path | None) -> dict[str, dict]:
+    """Map a fetched file's stem to the index entry it came from.
+
+    Without this the "index first" ordering below never happens: nothing else
+    writes index_decision_no or source_url, so decision_no_source could not be
+    "index" no matter what the docstring said, and source_url was null in every
+    published row.
+    """
+    if not index or not index.exists():
+        return {}
+    import fetch_missing
+    return {Path(fetch_missing.out_name(r)).stem.lower(): r
+            for r in jsonl.read(index)}
+
+
+def build(path: Path, corpus: str, index: Path | None = None) -> pa.Table:
+    lookup = index_lookup(index)
     rows = []
     for r in jsonl.read(path):
+        src = lookup.get(r["id"].lower())
+        if src:
+            r.setdefault("source_url", src.get("url"))
+            r.setdefault("index_decision_no", src.get("decision_no"))
         raw = r["text"]
         had_chrome = clean.has_chrome(raw)
         text, ok = clean.clean_guarded(raw)
@@ -111,9 +131,12 @@ def main() -> int:
     ap.add_argument("input", type=Path)
     ap.add_argument("--corpus", required=True, choices=["dab", "alj", "council"])
     ap.add_argument("-o", "--out-dir", type=Path, default=Path("out"))
+    ap.add_argument("--index", type=Path, default=None,
+                    help="decisions_index.jsonl, to take decision numbers and "
+                         "source URLs from the Board's own listing")
     args = ap.parse_args()
 
-    table = build(args.input, args.corpus)
+    table = build(args.input, args.corpus, args.index)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     out = args.out_dir / f"{args.corpus}.parquet"
     pq.write_table(table, out, compression="zstd", compression_level=9)

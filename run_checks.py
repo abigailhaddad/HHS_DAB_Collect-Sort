@@ -32,10 +32,11 @@ STRIP_CASES = [
      "(Cf. Knox County Economic Opportunity Council, Inc., DGAB Docket No. 78-14, "
      "Decision No. 68, October 29, 1979, p.2; Head Start of New Hanover County, "
      "DGAB Docket No. 78-94, Decision No. 65, September 26, 1979, p. 3;"),
+    # Note what this asserts: that a citation span exists somewhere in the
+    # string. It does NOT assert that the 1128(b)(7) before it is inside one --
+    # it is not, and tests/test_label.py pins that as a known limitation.
     ("DAB No. with pincite and year", True,
-     'in accordance with section 1128(b)(7) of the Social Security Act." 62 Fed. '
-     'Reg. 67,392 (Dec. 24, 1997) (quoted in Keith Michael Everman, D.C., DAB No. '
-     '1880, at 7 (2003).'),
+     'quoted in Keith Michael Everman, D.C., DAB No. 1880, at 7 (2003).'),
     ("ALJ decision cite", True,
      "Tajammul H. Bhatti, M.D., DAB CR245 (1992) (ALJ Decision). In his decision"),
     # The stripper must not reach into ordinary prose. An unbounded party-name

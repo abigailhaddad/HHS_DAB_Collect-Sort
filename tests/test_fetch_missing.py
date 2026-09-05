@@ -67,3 +67,13 @@ def test_a_fragment_is_stripped_too():
     rec = {"year": 2017, "decision_no": "CR1", "division": "alj",
            "url": "https://www.hhs.gov/sites/default/files/alj-cr1.pdf#page=2"}
     assert fm.out_name(rec) == "2017_alj-cr1.pdf"
+
+
+def test_the_pdf_check_looks_at_the_path_not_the_raw_url():
+    # ".../alj-cr5002.pdf?language=en" does not end in ".pdf", so the strict
+    # magic-byte check was skipped for exactly the URL era most likely to need
+    # it, and any HTML over the 1,500-byte floor saved cleanly as a .pdf.
+    url = "https://www.hhs.gov/sites/default/files/alj-cr5002.pdf?language=en"
+    ok, why = fm.is_good(b"<html>Redirecting</html>" + b"y" * 2000, url)
+    assert not ok and "not a PDF" in why
+    assert fm.is_good(b"%PDF-1.6" + b"x" * 5000, url)[0]

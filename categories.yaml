@@ -205,7 +205,7 @@ categories:
   dmepos_supplier_standards:
     description: 'DMEPOS supplier standards'
     citation: '42 CFR 424.57'
-    pattern: '424\.57'
+    pattern: '424\.57(?!\d)'
 
   hospice:
     description: 'Hospice certification, conditions of participation and payment disputes'

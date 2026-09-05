@@ -69,3 +69,13 @@ def test_a_malformed_table_is_rejected(tmp_path):
         f.write_text(text)
         with pytest.raises(SystemExit):
             categories.load(f)
+
+
+def test_a_section_number_does_not_match_its_longer_neighbours():
+    # 42 CFR 424.570, .571 and .573 are billing-privilege deactivation and
+    # reactivation, not DMEPOS supplier standards. Unlike the subsection
+    # patterns, whose digits sit inside parentheses, a bare "424.57" runs on.
+    rx = categories.CATEGORIES["dmepos_supplier_standards"].regex
+    assert rx.search("42 C.F.R. § 424.57")
+    for neighbour in ("424.570", "424.571", "424.573"):
+        assert not rx.search(f"42 C.F.R. § {neighbour}"), neighbour

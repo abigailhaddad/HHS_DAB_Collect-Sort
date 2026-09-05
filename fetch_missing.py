@@ -59,7 +59,13 @@ def is_good(body: bytes, url: str) -> tuple[bool, str]:
         return False, "empty response"
     if ARCHIVE_ERROR.search(body[:4000]):
         return False, "archive error page"
-    if url.lower().endswith((".pdf",)):
+    # Judge the path, not the raw URL. ".../alj-cr5002.pdf?language=en" does not
+    # end in ".pdf", so the strict magic-byte check was skipped for exactly the
+    # URL era most likely to need it, and anything over the HTML floor saved
+    # cleanly as a .pdf. out_name() already strips the query for the same
+    # reason; this did not, and the two disagreed about the same question.
+    path = url.split("?", 1)[0].split("#", 1)[0]
+    if path.lower().endswith(".pdf"):
         if not body.startswith(b"%PDF"):
             return False, "not a PDF"
         if len(body) < MIN_PDF_BYTES:
