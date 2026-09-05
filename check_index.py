@@ -71,9 +71,21 @@ def main() -> int:
     total = sum(now.values())
 
     if args.update or not args.baseline.exists():
-        args.baseline.write_text(json.dumps(dict(sorted(now.items())), indent=2) + "\n",
-                                 encoding="utf-8")
-        print(f"baseline written: {len(now)} division-years, {total} decisions")
+        # Merge, never replace. A run with a few flaky fetches would otherwise
+        # write zero for those years and quietly disarm the guard on exactly
+        # the years most likely to fail again.
+        merged = {}
+        if args.baseline.exists():
+            merged.update(json.loads(args.baseline.read_text(encoding="utf-8")))
+        kept = [k for k in merged if k in unfetched]
+        merged.update({k: v for k, v in now.items() if k not in unfetched})
+        args.baseline.write_text(json.dumps(dict(sorted(merged.items())), indent=2)
+                                 + "\n", encoding="utf-8")
+        print(f"baseline written: {len(merged)} division-years, "
+              f"{sum(merged.values())} decisions")
+        if kept:
+            print(f"  kept the previous count for {len(kept)} unfetched "
+                  f"division-year(s): {', '.join(sorted(kept))}")
         return 0
 
     baseline = json.loads(args.baseline.read_text(encoding="utf-8"))

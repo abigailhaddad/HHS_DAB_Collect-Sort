@@ -1,10 +1,10 @@
 """Slice membership as one table, rather than a copy of the text per category.
 
-slice_jsonl.py writes a JSONL per category, each carrying the full decision. A
-decision in several categories is stored several times, and for this corpus the
-result is 263 MB describing 61 MB of decisions. This writes the same
-information as a membership table: which decision is in which slice, and the
-evidence behind it. 157 KB, and it joins to the corpora on (corpus, id).
+Writing a JSONL per category, each carrying the full decision, stores a decision
+in several categories several times over: for this corpus, 263 MB describing
+61 MB of decisions. This writes the same information as a membership table --
+which decision is in which slice, and the evidence behind it -- at 157 KB, and
+it joins to the corpora on (corpus, id).
 
     python build_slices.py out/dab.parquet out/alj.parquet -o out/slices.parquet
 """

@@ -39,14 +39,23 @@ FIRST_YEAR = {"alj": 1981, "dab": 1974}
 #
 #   to ~1999   .../static/dab/decisions/board-decisions/1995/dab1550.html
 #   ~2000-2016 .../static/dab/decisions/alj-decisions/2016/cr4685.pdf
-#   2017 on    .../decisions/board-decisions/2020/board-dab-3027/index.html
+#   2017-2018  /sites/default/files/alj-cr5002.pdf?language=en
+#   2019 on    .../decisions/board-decisions/2020/board-dab-3027/index.html
 #              .../decisions/alj-decisions/2020/alj-cr5791/index.html
+#
+# The 2017-18 form has no year in the path and no "-decisions/" segment at all,
+# so a pattern anchored on those matched nothing and three years -- dab 2017,
+# dab 2018, alj 2017, some 500 decisions -- were invisible to the index while
+# their pages fetched perfectly well. A year that parses to zero is the thing
+# this collector is least able to notice about itself.
 #
 # The last era gives each decision its own page, so the filename is "index.html"
 # and only the directory identifies it.
 LINK = re.compile(
-    r'href="([^"]*?/(?:alj|board)-decisions/\d{4}/'
-    r'(?:[^"/]+\.(?:pdf|html?)|[^"/]+/index\.html?))"[^>]*>(.*?)</a>',
+    r'href="([^"]*?(?:'
+    r'/(?:alj|board)-decisions/\d{4}/(?:[^"/]+\.(?:pdf|html?)|[^"/]+/index\.html?)'
+    r'|/sites/default/files/(?:alj|board)-(?:cr|dab)[^"/]*\.(?:pdf|html?)'
+    r')(?:\?[^"]*)?)"[^>]*>(.*?)</a>',
     re.IGNORECASE | re.DOTALL)
 # The year page links to itself. Matching any /index.html would also throw away
 # every decision published from 2017 on.

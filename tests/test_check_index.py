@@ -65,3 +65,21 @@ def test_unfetched_does_not_suppress_other_years():
     lost, _ = check_index.compare({"alj:1989": 46, "dab:2020": 30},
                                   {"dab:2020": 0}, unfetched={"alj:1989"})
     assert lost == ["dab:2020: 30 -> 0 (-30)"]
+
+
+def test_update_keeps_the_previous_count_for_an_unfetched_year(tmp_path):
+    # A run with a flaky fetch would otherwise write zero for that year and
+    # disarm the guard on exactly the years most likely to fail again.
+    import json, subprocess, sys, pathlib
+    root = pathlib.Path(__file__).resolve().parents[1]
+    idx = tmp_path / "i.jsonl"
+    jsonl.write(idx, [{"division": "dab", "year": 2020, "decision_no": "1"}])
+    (tmp_path / "i.meta.json").write_text(json.dumps({"unfetched": ["alj:1989"]}))
+    base = tmp_path / "b.json"
+    base.write_text(json.dumps({"alj:1989": 46, "dab:2020": 1}))
+    subprocess.run([sys.executable, str(root / "check_index.py"), str(idx),
+                    "--baseline", str(base), "--update"], check=True,
+                   capture_output=True)
+    after = json.loads(base.read_text())
+    assert after["alj:1989"] == 46          # preserved, not zeroed
+    assert after["dab:2020"] == 1

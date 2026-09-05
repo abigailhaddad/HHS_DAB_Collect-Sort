@@ -106,3 +106,17 @@ def test_the_previously_unidentifiable_captions_now_parse():
     assert ci.decision_no_from_caption("2004.07.08CR1196 Alden-Princeton") == "CR1196"
     assert ci.decision_no_from_caption("1988.05.02 CR10R The Inspector General") == "CR10R"
     assert ci.decision_no_from_caption("2012.12.13. ALJ Ruling 2013-2 Willow Tree") == "RULING2013-2"
+
+
+def test_parses_the_flat_2017_era(index_pages):
+    # /sites/default/files/alj-cr5002.pdf?language=en -- no year in the path,
+    # no "-decisions/" segment, and a query string. dab 2017, dab 2018 and alj
+    # 2017 all parsed to zero while their pages fetched perfectly well.
+    rows = ci.parse_index(index_pages["alj_2017"], "alj", 2017)
+    assert [r["decision_no"] for r in rows] == ["CR5002", "2800"]
+    assert rows[0]["url"].endswith("/sites/default/files/alj-cr5002.pdf?language=en")
+
+
+def test_the_flat_era_does_not_swallow_unrelated_files(index_pages):
+    rows = ci.parse_index(index_pages["alj_2017"], "alj", 2017)
+    assert not any("unrelated-report" in r["url"] for r in rows)

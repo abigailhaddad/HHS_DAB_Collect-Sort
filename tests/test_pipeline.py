@@ -59,20 +59,24 @@ def test_full_pipeline(corpus):
         "-o", "out", cwd=corpus)
     assert (corpus / "out" / "alj.parquet").exists()
 
-    run(str(ROOT / "slice_jsonl.py"), "alj.jsonl", "out", "--all", cwd=corpus)
-    felony = corpus / "out" / "alj_enroll_a3_felony.jsonl"
-    rows = [json.loads(l) for l in felony.read_text().splitlines()]
-    assert len(rows) == 1
-    # Uniform schema: one `category`/`match_count` pair, not a per-category
-    # column name. Twenty-one different schemas cannot load as one dataset.
-    assert rows[0]["category"] == "enroll_a3_felony"
-    assert rows[0]["match_count"] >= 1
-    assert not any(k.endswith("_matches") for k in rows[0])
+    run(str(ROOT / "build_slices.py"), "out/alj.parquet",
+        "-o", "out/slices.parquet", cwd=corpus)
+    import pyarrow.parquet as pq
+    sl = pq.read_table(corpus / "out" / "slices.parquet")
+    cats = sl.column("category").to_pylist()
+    assert "enroll_a3_felony" in cats
+    # One membership row per (decision, category), not a copy of the decision.
+    assert set(sl.column_names) == {"corpus", "id", "decision_no", "category",
+                                    "match_count", "matches_in_citations",
+                                    "first_match_char"}
 
-    (corpus / "out" / "alj.jsonl").write_bytes((corpus / "alj.jsonl").read_bytes())
     run(str(ROOT / "build_manifests.py"), "--dir", "out", cwd=corpus)
     manifest = json.loads((corpus / "out" / "manifest_alj.json").read_text())
-    assert manifest["slice_count"] == len(categories.CATEGORIES)
+    # Every category is listed, empty ones included: a category that matched
+    # nothing is a fact, and omitting it looks like it was never tried.
+    assert manifest["category_count"] == len(categories.CATEGORIES)
+    assert len(manifest["slices"]) == len(categories.CATEGORIES)
+    assert manifest["slice_count"] >= 1
     for s in manifest["slices"]:
         assert s["description"] and s["citation"], s["category"]
 

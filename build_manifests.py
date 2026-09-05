@@ -1,8 +1,10 @@
-"""Build a manifest per corpus describing every category slice on disk.
+"""Describe every category slice: what it is, its legal basis, and its size.
 
-Descriptions and citations come from categories.py, so a slice can no longer
-ship with a blank legal basis because its name was spelled one way in the
-slicer and another way in the manifest.
+Reads the membership table build_slices.py writes, so the manifest and the
+published slices cannot disagree about what is in them. Descriptions and legal
+citations come from categories.yaml, so a slice cannot ship with a blank basis.
+
+    python build_manifests.py --dir out/
 """
 from __future__ import annotations
 
@@ -10,55 +12,59 @@ import argparse
 import json
 from pathlib import Path
 
+import pyarrow.parquet as pq
+
 import categories
 
 
-def count_lines(path: Path) -> int:
-    with path.open(encoding="utf-8") as f:
-        return sum(1 for line in f if line.strip())
+def build_manifest(slices: Path, corpus: str) -> dict:
+    t = pq.read_table(slices, columns=["corpus", "category"])
+    counts: dict[str, int] = {}
+    for c, cat in zip(t.column("corpus").to_pylist(), t.column("category").to_pylist()):
+        if c == corpus:
+            counts[cat] = counts.get(cat, 0) + 1
 
+    unknown = sorted(set(counts) - set(categories.CATEGORIES))
+    if unknown:
+        raise SystemExit(
+            f"{corpus}: slice(s) with no entry in categories.yaml: "
+            f"{', '.join(unknown)}. Add them there rather than shipping a slice "
+            f"with no description or legal basis.")
 
-def build_manifest(root: Path, corpus: str, source_file: str) -> dict:
-    source_path = root / source_file
-    slices, unknown = [], []
-    for path in sorted(root.glob(f"{corpus}_*.jsonl")):
-        name = path.stem[len(corpus) + 1:]
-        cat = categories.CATEGORIES.get(name)
-        if cat is None:
-            unknown.append(path.name)
-            continue
-        slices.append({
-            "file": path.name,
+    # Every category is listed, including the empty ones. A category that
+    # matched nothing is a fact about the corpus; omitting it makes the
+    # manifest look like the category was never tried.
+    return {
+        "corpus": corpus,
+        "slice_count": sum(1 for c in categories.CATEGORIES if counts.get(c)),
+        "category_count": len(categories.CATEGORIES),
+        "slices": [{
             "category": cat.name,
             "description": cat.description,
             "citation": cat.citation,
-            "record_count": count_lines(path),
-        })
-    if unknown:
-        raise SystemExit(
-            f"{corpus}: slice file(s) with no entry in categories.py: "
-            f"{', '.join(unknown)}. Add them there rather than shipping a "
-            f"slice with no description or legal basis.")
-    return {
-        "corpus": corpus,
-        "source_file": source_file,
-        "source_total_records": count_lines(source_path) if source_path.exists() else None,
-        "slice_count": len(slices),
-        "slices": slices,
+            "record_count": counts.get(cat.name, 0),
+        } for cat in categories.CATEGORIES.values()],
     }
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dir", type=Path, default=Path("."),
-                    help="directory holding the corpora and slices")
+    ap.add_argument("--dir", type=Path, default=Path("out"),
+                    help="directory holding slices.parquet and the corpora")
+    ap.add_argument("--slices", type=Path, default=None)
     args = ap.parse_args()
-    for corpus in ("dab", "alj"):
-        manifest = build_manifest(args.dir, corpus, f"{corpus}.jsonl")
+    slices = args.slices or (args.dir / "slices.parquet")
+    if not slices.exists():
+        raise SystemExit(f"{slices}: run build_slices.py first")
+
+    t = pq.read_table(slices, columns=["corpus"])
+    for corpus in sorted(set(t.column("corpus").to_pylist())):
+        manifest = build_manifest(slices, corpus)
         out = args.dir / f"manifest_{corpus}.json"
         out.write_text(json.dumps(manifest, indent=2, ensure_ascii=False),
                        encoding="utf-8")
-        print(f"{out.name}: {manifest['slice_count']} slices")
+        print(f"{out.name}: {manifest['slice_count']} non-empty of "
+              f"{manifest['category_count']} categories")
     return 0
 
 

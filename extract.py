@@ -9,7 +9,7 @@ are HTML, later ones are PDF, and from 2017 each decision is a web page again.
 A PDF-only extractor silently skips two thirds of the collection window.
 
 One JSON object per line, one line per decision. Categorisation is not done
-here -- that is slice_jsonl.py's job, driven by categories.py. Emitting a (b)(7)
+here -- that is build_slices.py's job, driven by categories.yaml. Emitting a (b)(7)
 slice from inside the extractor meant one category was privileged over the
 fifteen others and its label was computed by different code than theirs.
 """

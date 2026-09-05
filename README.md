@@ -53,9 +53,8 @@ pip install -r requirements.txt      # -r requirements-ocr.txt for --ocr
 python collect_index.py --out decisions_index.jsonl   # what the Board published
 python extract.py ./decisions -o dab.jsonl            # PDF and HTML -> text
 python build_dataset.py dab.jsonl --corpus dab -o out/
-python slice_jsonl.py dab.jsonl out/ --all            # -> a slice per category
+python build_slices.py out/*.parquet -o out/slices.parquet   # category membership
 python build_manifests.py --dir out/
-python build_slices.py out/*.parquet -o out/slices.parquet
 python link_corpora.py out/dab.parquet out/alj.parquet # who appealed what
 python build_card.py --dir out/                       # dataset card, from the data
 

@@ -44,7 +44,8 @@ def index_pages():
     return {"alj_2016": ALJ_2016_INDEX,
             "dab_1995": DAB_1995_INDEX,
             "dab_2016": DAB_2016_INDEX,
-            "dab_2020": DAB_2020_INDEX}
+            "dab_2020": DAB_2020_INDEX,
+            "alj_2017": ALJ_2017_INDEX}
 
 
 @pytest.fixture
@@ -67,5 +68,18 @@ DAB_2020_INDEX = """
   2020.12.29; DAB3027; Transnet Home Group</a>
 <a href="/about/agencies/dab/decisions/alj-decisions/2020/alj-cr5791/index.html">
   2020.10.28 CR5791 Some Petitioner v. CMS</a>
+</body></html>
+"""
+
+
+# 2017-18: flat under /sites/default/files/, no year in the path, and a query
+# string. Three years parsed to zero against a pattern anchored on the others.
+ALJ_2017_INDEX = """
+<html><body>
+<a href="/sites/default/files/alj-cr5002.pdf?language=en">
+  2017.12.29 CR5002 Hieu Ball, M.D., Inc., v. CMS</a>
+<a href="/sites/default/files/board-dab2800.pdf">
+  2017.06.01 DAB2800 Some Appellant</a>
+<a href="/sites/default/files/unrelated-report.pdf">An unrelated HHS report</a>
 </body></html>
 """
