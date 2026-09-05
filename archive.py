@@ -8,10 +8,12 @@ snapshot, then fetch it.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import random
 import re
 import time
+import zlib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -47,9 +49,31 @@ def get(url: str, timeout: int = 30, tries: int = 4) -> bytes | None:
     return None
 
 
+def decompress(body: bytes) -> bytes:
+    """Undo transfer encoding the Archive replays verbatim.
+
+    The id_ endpoint returns the *original* response bytes, so if the site
+    served gzip that is what comes back -- regardless of what we asked for, and
+    with no Content-Encoding handling from urllib. Decoded as text it is
+    binary noise that looks like a page which failed to parse rather than one
+    that was never decompressed.
+    """
+    if body[:2] == b"\x1f\x8b":
+        try:
+            return gzip.decompress(body)
+        except OSError:
+            return body
+    if body[:1] == b"\x78":                       # zlib/deflate
+        try:
+            return zlib.decompress(body)
+        except zlib.error:
+            return body
+    return body
+
+
 def get_text(url: str, **kw) -> str | None:
     body = get(url, **kw)
-    return body.decode("utf-8", "ignore") if body is not None else None
+    return decompress(body).decode("utf-8", "ignore") if body is not None else None
 
 
 def snapshot_url(page_url: str) -> str | None:
