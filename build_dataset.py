@@ -58,8 +58,31 @@ def index_lookup(index: Path | None) -> dict[str, dict]:
     if not index or not index.exists():
         return {}
     import fetch_missing
-    return {Path(fetch_missing.out_name(r)).stem.lower(): r
-            for r in jsonl.read(index)}
+
+    # Two keys per entry, because a decision's file can be named two ways: as
+    # fetch_missing saves it ("2024_alj-cr5002"), or as it is named at the
+    # source ("alj-cr5002"). Keying on only the first silently fails to join
+    # for any corpus assembled by other means, which is most of this one.
+    lookup: dict[str, dict] = {}
+    seen_numbers: set[str] = set()
+    for r in jsonl.read(index):
+        tail = r["url"].rstrip("/").split("/")[-1].split("?", 1)[0].split("#", 1)[0]
+        if tail.lower().startswith("index."):
+            tail = r["url"].rstrip("/").split("/")[-2] + ".html"
+        for key in (Path(fetch_missing.out_name(r)).stem, Path(tail).stem):
+            lookup.setdefault(key.lower(), r)
+        # And by division plus decision number, for a corpus whose filenames
+        # are captions rather than either of those -- most of this one. Only
+        # where the number is unambiguous in the index: a number the Board
+        # lists twice cannot identify a file.
+        if r.get("decision_no"):
+            number_key = f"{r['division']}#{r['decision_no']}".lower()
+            if number_key in seen_numbers:
+                lookup.pop(number_key, None)
+            else:
+                seen_numbers.add(number_key)
+                lookup[number_key] = r
+    return lookup
 
 
 def build(path: Path, corpus: str, index: Path | None = None) -> pa.Table:
@@ -67,6 +90,11 @@ def build(path: Path, corpus: str, index: Path | None = None) -> pa.Table:
     rows = []
     for r in jsonl.read(path):
         src = lookup.get(r["id"].lower())
+        if src is None:
+            # Fall back to the number parsed from the filename.
+            from_id = metadata.decision_no_from_id(r["id"])
+            if from_id:
+                src = lookup.get(f"{corpus}#{from_id}".lower())
         if src:
             r.setdefault("source_url", src.get("url"))
             r.setdefault("index_decision_no", src.get("decision_no"))

@@ -102,3 +102,35 @@ def test_missing_corpus_file_fails_loudly(tmp_path):
                         "nope.jsonl"], cwd=tmp_path, capture_output=True, text=True)
     assert r.returncode != 0
     assert "no such file" in (r.stdout + r.stderr).lower()
+
+
+def test_the_index_join_populates_source_url_and_the_number(corpus):
+    # build_dataset read index_decision_no and source_url as the first-priority
+    # source for the decision number and nothing in the repo ever wrote them,
+    # so decision_no_source could not be "index" and source_url was null in
+    # every row the documented pipeline produced.
+    run(str(ROOT / "extract.py"), "pdfs", "-o", "alj.jsonl", cwd=corpus)
+    index = corpus / "decisions_index.jsonl"
+    index.write_text(json.dumps({
+        "division": "alj", "year": 2024, "decision_no": "CR9999",
+        "caption": "2024.03.04 CR9999 Test Provider LLC v. CMS",
+        "url": "https://www.hhs.gov/sites/default/files/static/dab/decisions/"
+               "alj-decisions/2024/2024.03.04 CR9999 Test Provider LLC v. CMS.pdf",
+    }) + "\n", encoding="utf-8")
+    run(str(ROOT / "build_dataset.py"), "alj.jsonl", "--corpus", "alj",
+        "-o", "out", "--index", "decisions_index.jsonl", cwd=corpus)
+
+    import pyarrow.parquet as pq
+    t = pq.read_table(corpus / "out" / "alj.parquet")
+    i = next(n for n, k in enumerate(t.column("id").to_pylist()) if "CR9999" in k)
+    assert t.column("decision_no_source").to_pylist()[i] == "index"
+    assert t.column("source_url").to_pylist()[i].endswith(".pdf")
+
+
+def test_without_an_index_the_pipeline_still_builds(corpus):
+    run(str(ROOT / "extract.py"), "pdfs", "-o", "alj.jsonl", cwd=corpus)
+    run(str(ROOT / "build_dataset.py"), "alj.jsonl", "--corpus", "alj",
+        "-o", "out", cwd=corpus)
+    import pyarrow.parquet as pq
+    t = pq.read_table(corpus / "out" / "alj.parquet")
+    assert set(t.column("decision_no_source").to_pylist()) <= {"filename", "text", None}
