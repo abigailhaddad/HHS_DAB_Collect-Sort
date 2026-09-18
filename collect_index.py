@@ -235,7 +235,8 @@ def main() -> int:
     # failed fetch as decisions having been lost.
     meta = args.out.with_suffix(".meta.json")
     meta.write_text(json.dumps({"unfetched": sorted(unfetched),
-                                "decisions": len(rows)}, indent=2) + "\n",
+                                "decisions": len(rows),
+                                "cdp": bool(args.cdp)}, indent=2) + "\n",
                     encoding="utf-8")
     print(f"\n{len(rows)} decisions listed -> {args.out}")
     if unfetched:

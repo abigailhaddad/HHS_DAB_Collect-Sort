@@ -88,16 +88,35 @@ def main() -> int:
     ap.add_argument("--baseline", type=Path, default=Path("index_baseline.json"))
     ap.add_argument("--update", action="store_true",
                     help="write the current counts as the new baseline")
+    ap.add_argument("--allow-cdp", action="store_true",
+                    help="update the baseline even though the index was built "
+                         "with --cdp (see the warning this normally raises)")
     args = ap.parse_args()
 
     now = counts(args.index)
     # Years the collector could not fetch are unknown, not empty. Counting them
     # as zero turns one flaky Archive request into "46 decisions lost".
     meta_path = args.index.with_suffix(".meta.json")
-    unfetched = set()
-    if meta_path.exists():
-        unfetched = set(json.loads(meta_path.read_text()).get("unfetched", []))
+    meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+    unfetched = set(meta.get("unfetched", []))
     total = sum(now.values())
+
+    if args.update and meta.get("cdp") and not args.allow_cdp:
+        # The exact mistake this module's own docstring warns about: a count
+        # only a hand-started Chrome can reach becomes the daily target, and
+        # the unattended job -- which has no browser to attach to -- fails
+        # every single day after, forever, because it can never independently
+        # reproduce a number it did not really find. It happened once, the
+        # day this flag was added: alj:2026 baselined at 196 from a --cdp run,
+        # then the very next scheduled run found the Archive's actual 33 and
+        # reported it as 163 decisions lost.
+        print("refusing to update the baseline: this index was built with "
+              "--cdp, so part of it came from a live browser rather than the "
+              "Archive. The unattended daily job can only ever verify the "
+              "Archive's copy, so baselining a browser-sourced count fails "
+              "every future run against a target it cannot reach. Pass "
+              "--allow-cdp if you really mean to do this.", file=sys.stderr)
+        return 1
 
     if args.update or not args.baseline.exists():
         # Merge, never replace. A run with a few flaky fetches would otherwise
