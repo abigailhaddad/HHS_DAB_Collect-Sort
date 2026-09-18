@@ -17,7 +17,13 @@ def table(built_corpus):
     if not built_corpus:
         pytest.skip("no built corpus; run build_dataset.py first")
     import pyarrow as pa
-    return pa.concat_tables([pq.read_table(p) for p in built_corpus])
+    # link_corpora.py appends appealed_in to alj.parquet only, so a real,
+    # fully-built out/ -- the one this repo tells you to build -- always has
+    # one corpus with a column the others don't. A bare concat_tables refuses
+    # that as a schema mismatch; promote_options fills the gap with nulls
+    # instead of failing the whole test run on a column these tests don't use.
+    return pa.concat_tables([pq.read_table(p) for p in built_corpus],
+                            promote_options="default")
 
 
 def col(t, name):
@@ -25,7 +31,12 @@ def col(t, name):
 
 
 def test_schema_matches_the_declared_one(table):
-    assert set(table.column_names) == {f.name for f in build_dataset.SCHEMA}
+    # appealed_in is link_corpora.py's, added to alj.parquet only; every other
+    # column comes from build_dataset.SCHEMA and every one of those must be
+    # present.
+    declared = {f.name for f in build_dataset.SCHEMA}
+    assert declared <= set(table.column_names)
+    assert set(table.column_names) - declared <= {"appealed_in"}
 
 
 def test_ids_are_unique(table):
@@ -65,10 +76,11 @@ def test_dates_agree_with_years(table):
 
 
 def test_decision_numbers_are_well_formed(table):
-    # Three series: Appellate ("2740"), Civil Remedies ("CR4685"), and the ALJ
-    # Rulings ("RULING2013-2"). A trailing R marks a decision on
-    # reconsideration -- CR10R is not CR10.
-    ok = re.compile(r"(?:CR)?\d{1,5}R?|RULING\d{4}-\d{1,3}")
+    # Four series: Appellate ("2740"), Civil Remedies ("CR4685"), the ALJ
+    # Rulings ("RULING2013-2"), and the Center for Tobacco Products'
+    # ("TB10776"), a separate docket from CR and DAB. A trailing R marks a
+    # decision on reconsideration -- CR10R is not CR10.
+    ok = re.compile(r"(?:CR)?\d{1,5}R?|RULING\d{4}-\d{1,3}|TB\d{1,6}")
     bad = [n for n in col(table, "decision_no") if n is not None and not ok.fullmatch(n)]
     assert not bad, f"malformed decision numbers: {bad[:5]}"
 

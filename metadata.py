@@ -164,8 +164,15 @@ FILENAME_RULING = re.compile(
 # of CR10, a different document. Dropping it merged the two. This also reads
 # "Decision No. 1550" as well as "DAB1550" and "CR4685". No leading \b: in
 # "2004.07.08CR1196" the digit and the C are both word characters.
+#
+# TB is the Center for Tobacco Products' own series -- "TB10776" -- a
+# completely separate tribunal docket from CR and DAB. Its absence here made
+# every TB decision invisible to decision_no_from_text, which meant
+# audit_completeness.py could never tell one was missing: 285 of them, none in
+# the corpus, none of them counted as a gap because a decision with no number
+# does not show up as a decision that failed to match one.
 FILENAME_NO = re.compile(
-    r"(DAB|CR|Decision\s+No\.?|No\.)[\s;,._-]*0*(\d{1,5}R?)\b", re.IGNORECASE)
+    r"(DAB|CR|TB|Decision\s+No\.?|No\.)[\s;,._-]*0*(\d{1,5}R?)\b", re.IGNORECASE)
 
 
 def decision_no_from_text(fragment: str) -> str | None:
@@ -194,7 +201,7 @@ def decision_no_from_text(fragment: str) -> str | None:
     if not m:
         return None
     label = re.sub(r"[\s.]", "", m.group(1)).upper()
-    prefix = "CR" if label == "CR" else ""
+    prefix = label if label in ("CR", "TB") else ""
     no = f"{prefix}{m.group(2).upper()}"
     # A bare four-digit number after a naked "No." is a year far more often
     # than a decision -- "ALJ Ruling No. 2014-17" reduced to 2014 that way.

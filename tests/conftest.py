@@ -48,12 +48,25 @@ def index_pages():
             "alj_2017": ALJ_2017_INDEX}
 
 
+CORPUS_NAMES = {"dab", "alj", "council"}
+
+
 @pytest.fixture
 def built_corpus():
     """A built Parquet corpus, or None. Data lives on Hugging Face, not in git,
-    so the integrity tests skip rather than fail on a fresh clone."""
+    so the integrity tests skip rather than fail on a fresh clone.
+
+    out/ also holds slices.parquet, built_manifests.py's manifest_*.json, and
+    the dataset card -- build_slices.py writes it right there, per this repo's
+    own README. A bare "*.parquet" glob picks it up too, and its schema
+    (category, match_count, ...) has nothing in common with a corpus's, so
+    every integrity test failed with a concat error the one time this fixture
+    ran against a directory actually built the documented way.
+    """
     for candidate in (Path("out"), Path("../out"), Path(__file__).parent / "out"):
-        files = sorted(candidate.glob("*.parquet")) if candidate.is_dir() else []
+        files = sorted(candidate / f"{name}.parquet" for name in CORPUS_NAMES) \
+            if candidate.is_dir() else []
+        files = [f for f in files if f.exists()]
         if files:
             return files
     return None
