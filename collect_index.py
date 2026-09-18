@@ -10,6 +10,15 @@ all: the corpus can be diffed against the publisher's own list rather than
 against a guess about which decision numbers ought to exist.
 
     python collect_index.py --out decisions_index.jsonl
+
+The Archive's crawl of a year still in progress can sit for months between
+visits -- the 2026 index pages were captured once, in May, and nothing since.
+That's invisible to the loss check above because it never reads as zero: 33
+decisions is a perfectly plausible-looking answer for a year that has actually
+published 196. --cdp tops up the current year(s) from a real, hand-started
+Chrome (see fetch_via_browser.py) rather than from that stale snapshot.
+
+    python collect_index.py --out decisions_index.jsonl --cdp http://localhost:9222
 """
 from __future__ import annotations
 
@@ -23,6 +32,7 @@ import urllib.parse
 import archive
 import jsonl
 import metadata
+from fetch_via_browser import BLOCKED
 from pathlib import Path
 
 BASE = "https://www.hhs.gov/about/agencies/dab/decisions"
@@ -97,6 +107,24 @@ def parse_index(page: str, division: str, year: int) -> list[dict]:
     return out
 
 
+def fetch_live(page, url: str) -> str | None:
+    """The index page as a real, hand-started Chrome sees it, over CDP.
+
+    Status is not the test -- a block page returns 200 through a browser just
+    as happily as anything else -- so this is the same content check
+    fetch_via_browser.py uses for individual decisions, applied to a listing.
+    """
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(800)
+        body = page.content()
+    except Exception:
+        return None
+    if not body or len(body) < 5000 or BLOCKED.search(body[:4000]):
+        return None
+    return body
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path("decisions_index.jsonl"))
@@ -107,13 +135,22 @@ def main() -> int:
     ap.add_argument("--baseline", type=Path, default=Path("index_baseline.json"),
                     help="retry a division-year that comes back below its last "
                          "committed count, not just an empty one")
+    ap.add_argument("--cdp", default=None,
+                    help="http://localhost:9222 of a Chrome started with "
+                         "--remote-debugging-port; tops up --live-years of "
+                         "the index live instead of trusting the Archive's "
+                         "snapshot of a year still being published")
+    ap.add_argument("--live-years", type=int, default=1,
+                    help="how many years back from --to-year to top up "
+                         "live when --cdp is set")
     args = ap.parse_args()
 
     baseline = {}
     if args.baseline.exists():
         baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
 
-    rows, unfetched = [], []
+    by_key: dict[str, list[dict]] = {}
+    unfetched = []
     for division in DIVISIONS:
         start = args.from_year or FIRST_YEAR[division]
         for year in range(start, args.to_year + 1):
@@ -147,8 +184,50 @@ def main() -> int:
                 unfetched.append(f"{division}:{year}")
                 print(f"{division} {year}: NOT COLLECTED", flush=True)
                 continue
-            rows.extend(found)
+            by_key[f"{division}:{year}"] = found
             print(f"{division} {year}: {len(found)}", flush=True)
+
+    if args.cdp:
+        from playwright.sync_api import sync_playwright
+
+        live_from = args.to_year - args.live_years + 1
+        with sync_playwright() as pw:
+            browser = pw.chromium.connect_over_cdp(args.cdp)
+            if not browser.contexts:
+                print("no browser context; is Chrome running with "
+                      "--remote-debugging-port?")
+                return 1
+            browser_page = browser.contexts[0].new_page()
+            try:
+                for division in DIVISIONS:
+                    for year in range(max(args.from_year or FIRST_YEAR[division],
+                                           live_from), args.to_year + 1):
+                        key = f"{division}:{year}"
+                        page_url = f"{BASE}/{DIVISIONS[division]}/{year}/index.html"
+                        body = fetch_live(browser_page, page_url)
+                        time.sleep(args.delay)
+                        if not body:
+                            print(f"{division} {year}: live fetch failed, "
+                                  f"keeping Archive's {len(by_key.get(key, []))}",
+                                  flush=True)
+                            continue
+                        live = parse_index(body, division, year)
+                        # Union by URL: the live page is the freshest source but
+                        # a transient miss there shouldn't drop something only
+                        # the Archive still has.
+                        merged = {r["url"]: r for r in by_key.get(key, [])}
+                        merged.update({r["url"]: r for r in live})
+                        merged_list = list(merged.values())
+                        if key in unfetched and merged_list:
+                            unfetched.remove(key)
+                        gain = len(merged_list) - len(by_key.get(key, []))
+                        by_key[key] = merged_list
+                        print(f"{division} {year}: {len(merged_list)} live "
+                              f"(+{gain} over Archive)", flush=True)
+            finally:
+                browser_page.close()
+
+    rows = [r for found in by_key.values() for r in found]
 
     jsonl.write(args.out, rows)
     # A sidecar, so that a year nobody could fetch is distinguishable downstream
