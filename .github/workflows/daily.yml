@@ -33,6 +33,12 @@ jobs:
       - name: Fail if any division-year lost decisions
         run: python check_index.py decisions_index.jsonl --baseline index_baseline.json
 
+      # Non-fatal: the Archive's crawl schedule isn't this collector's bug to
+      # fail on, but a snapshot that goes stale for months is exactly what let
+      # 179 published decisions sit invisible until someone happened to look.
+      - name: Warn if the current year's Archive snapshot has gone stale
+        run: python check_snapshot_age.py --max-age-days 21
+
       # Fold the new decisions into the baseline and commit it, so a gain is
       # reported once rather than every day until someone does it by hand. The
       # update merges, so a year that could not be fetched keeps its old count
