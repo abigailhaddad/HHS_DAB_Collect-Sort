@@ -104,26 +104,43 @@ def main() -> int:
                     help="override the per-division first year")
     ap.add_argument("--to-year", type=int, default=2026)
     ap.add_argument("--delay", type=float, default=1.0)
+    ap.add_argument("--baseline", type=Path, default=Path("index_baseline.json"),
+                    help="retry a division-year that comes back below its last "
+                         "committed count, not just an empty one")
     args = ap.parse_args()
+
+    baseline = {}
+    if args.baseline.exists():
+        baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
 
     rows, unfetched = [], []
     for division in DIVISIONS:
         start = args.from_year or FIRST_YEAR[division]
         for year in range(start, args.to_year + 1):
             page_url = f"{BASE}/{DIVISIONS[division]}/{year}/index.html"
+            expected = baseline.get(f"{division}:{year}", 0)
             found = None
             # A year page that exists always lists decisions, so a parse of zero
             # is a failure and not a fact. Retrying separates the two: the
             # Archive dropped ALJ 1989 on one run and served all 46 on the next,
             # and recorded as a zero that reads exactly like a year in which the
             # Board published nothing.
+            #
+            # The same thing happens without ever hitting zero: the Archive
+            # served a snapshot missing the newest ALJ 2026 decision -- 32
+            # instead of the 33 already on record -- with no error to catch,
+            # because "some decisions" looks exactly as valid as "all of them".
+            # A fresh lookup a minute later returned the full 33 from the same
+            # single archived snapshot, so the miss was in the fetch, not the
+            # page. Retrying below the last committed count catches that the
+            # same way the zero case is caught.
             for attempt in range(2):
                 snap = archive.snapshot_url(page_url)
                 time.sleep(args.delay)
                 page = archive.get_text(snap) if snap else None
                 if page:
                     found = parse_index(page, division, year)
-                    if found:
+                    if found and len(found) >= expected:
                         break
                 time.sleep(args.delay)
             if not found:
