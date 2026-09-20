@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HHS DAB Decisions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="shared/shared.css">
+    <link rel="stylesheet" href="site.css">
+    <style>
+        .dataTables_wrapper .row { margin: 0; }
+        .dataTables_wrapper .row > div { padding: 0; }
+        .view-link { cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="site-container">
+        <header class="site-header">
+            <h1>HHS Departmental Appeals Board</h1>
+            <p class="site-subtitle">Every published decision, 1974&ndash;present</p>
+        </header>
+
+        <div id="toolbarButtons" class="toolbar-row"></div>
+        <div class="filters-bar-container">
+            <div class="filters-bar" id="filtersBar">
+                <span class="filters-bar-empty">No filters applied</span>
+            </div>
+        </div>
+
+        <div class="stats-row">
+            <div class="stat-card">
+                <h3>Total Decisions</h3>
+                <div class="stat-value" id="statTotal">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Tribunals</h3>
+                <div class="stat-value" id="statTribunals">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Categories</h3>
+                <div class="stat-value" id="statCategories">--</div>
+            </div>
+            <div class="stat-card">
+                <h3>Date Range</h3>
+                <div class="stat-value" id="statDateRange">--</div>
+            </div>
+        </div>
+
+        <div class="table-scroll-wrapper">
+            <table id="decisionsTable" class="table" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>Decision #</th>
+                        <th>Tribunal</th>
+                        <th>Year</th>
+                        <th>Date</th>
+                        <th>Respondent</th>
+                        <th>Category</th>
+                        <th>Disposition</th>
+                        <th>Judges</th>
+                        <th>Provider IDs</th>
+                        <th>Text</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <footer class="site-footer">
+            <p>Data collected from <a href="https://www.hhs.gov/about/agencies/dab/decisions/">hhs.gov/about/agencies/dab/decisions</a> &middot;
+            Dataset on <a href="https://huggingface.co/datasets/abigailhaddad/hhs-dab-decisions">Hugging Face</a> &middot;
+            Code on <a href="https://github.com/abigailhaddad/HHS_DAB_Collect-Sort">GitHub</a> &middot;
+            Built by <a href="https://abigailhaddad.com">Abigail Haddad</a></p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="shared/shared.js"></script>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

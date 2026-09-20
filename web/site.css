@@ -1,0 +1,106 @@
+/* Page layout + theme for the DAB explorer. shared-ui's shared.css only
+   covers filter bar / DataTables / modal styling; this is the part that used
+   to live in usajobs_historical's older shared.css alongside its own JS
+   (ServerSideFilterManager), which this project doesn't use -- so it's
+   split out here instead of copied wholesale. Same palette as
+   usajobs-historical.abigailhaddad.com for a consistent look across sites. */
+
+:root {
+    --color-bg: #FFF8F0;
+    --color-text: #3D2B1F;
+    --color-text-muted: #7A6E62;
+    --color-accent: #2D6A4F;
+    --color-border: #E8DDD0;
+
+    --font-heading: 'DM Sans', sans-serif;
+    --font-body: 'Source Sans 3', sans-serif;
+
+    --card-padding: 1.5rem;
+    --card-radius: 0.5rem;
+
+    /* shared-ui theme hooks */
+    --sui-primary: #3D2B1F;
+    --sui-accent: #2D6A4F;
+    --sui-bg: #FFF8F0;
+    --sui-bg-alt: #F5EDE0;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+    font-family: var(--font-body);
+    color: var(--color-text);
+    background: var(--color-bg);
+    line-height: 1.7;
+    font-size: 1.0625rem;
+    margin: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.01em;
+    color: var(--color-text);
+}
+h1 { font-size: 2.5rem; font-weight: 700; line-height: 1.2; }
+
+a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-decoration-color: rgba(45, 106, 79, 0.25);
+    text-underline-offset: 2px;
+}
+a:hover { text-decoration-color: var(--color-accent); }
+
+.site-container { max-width: 1300px; margin: 0 auto; padding: 0 1.5rem; }
+
+.site-header { padding: 2rem 0 1.5rem; }
+.site-header h1 { margin: 0 0 0.25rem; }
+.site-subtitle { color: var(--color-text-muted); font-size: 1.0625rem; margin: 0; }
+
+.toolbar-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.stat-card {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--card-radius);
+    padding: var(--card-padding);
+}
+.stat-card h3 {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    margin: 0 0 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-family: var(--font-body);
+}
+.stat-card .stat-value {
+    font-family: var(--font-heading);
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.table-scroll-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Column-specific filters (the "+ Add Filter" bar) do the searching here;
+   the generic DataTables global search box is redundant with it. Same call
+   usajobs-historical makes. */
+.dataTables_filter { display: none; }
+
+.site-footer {
+    padding: 2rem 0;
+    border-top: 1px solid var(--color-border);
+    margin-top: 3rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+.site-footer a { color: var(--color-text-muted); }
+.site-footer a:hover { color: var(--color-accent); }
