@@ -89,6 +89,81 @@ a:hover { text-decoration-color: var(--color-accent); }
 
 .table-scroll-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+.fulltext-search-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+.fulltext-search-row input { max-width: 420px; }
+
+.related-link, .view-link { cursor: pointer; }
+
+.panels-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.panel {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--card-radius);
+    padding: var(--card-padding);
+}
+.panel h3 {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    margin: 0 0 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-family: var(--font-body);
+}
+.panel:empty { display: none; }
+
+.outcome-list { list-style: none; margin: 0 0 0.75rem; padding: 0; }
+.outcome-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.outcome-list li:last-child { border-bottom: none; }
+.outcome-label { text-transform: capitalize; }
+.outcome-count { font-weight: 600; }
+
+.year-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 90px;
+}
+.year-bar {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    height: 100%;
+}
+.year-bar-fill {
+    width: 100%;
+    background: var(--color-accent);
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+}
+.year-bar-label {
+    font-size: 0.6rem;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    writing-mode: vertical-rl;
+}
+
+@media (max-width: 700px) {
+    .panels-row { grid-template-columns: 1fr; }
+}
+
 /* Column-specific filters (the "+ Add Filter" bar) do the searching here;
    the generic DataTables global search box is redundant with it. Same call
    usajobs-historical makes. */

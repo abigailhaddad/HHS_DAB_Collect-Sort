@@ -10,12 +10,89 @@ from __future__ import annotations
 
 import argparse
 import collections
+import re
 from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 import categories
+import jsonl
+
+# respondent (build_dataset.py's own field) is which of six government
+# offices is a party -- CMS, Inspector General, etc. -- never the actual
+# doctor, facility, or company, because that's simply not what
+# metadata.RESPONDENTS's regex list extracts. That name was never captured
+# anywhere in the corpus-building pipeline, but it didn't need to be: the
+# Board's own index already carries it in the caption ("The Inspector
+# General v. Roy W. Schoettle, D.O.", "CTP v. Rusda Oil Company Inc."), and
+# build_dataset.py reads that record already (for source_url) without ever
+# looking at .caption. This parses it back out for the site, from
+# decisions_index.jsonl, which already exists locally -- no corpus rebuild,
+# no re-fetching a single decision.
+_CAPTION_PREFIX = re.compile(r"^\s*\d{4}\.\d{2}\.\d{2}\s*[.,;]?\s*")
+_DECISION_NO_TOKEN = re.compile(
+    r"^(?:ALJ\s+)?Ruling\s+No\.?\s*[\d\-]+\s*[.,;]?\s*"
+    r"|^[A-Za-z0-9\-]+\s*[.,;]?\s*", re.IGNORECASE)
+_VS = re.compile(r"\s+vs?\.?\s+", re.IGNORECASE)
+# The same government-party list metadata.RESPONDENTS classifies a decision
+# by, plus HHS/FDA/CTP forms that show up in captions but never in
+# RESPONDENTS (that list was built for ALJ/Appellate headers, which never
+# say "FDA" in so many words the way a caption does).
+_GOVT_PARTY = re.compile(
+    r"(?i:\bthe\s+inspector\s+general\b)|\bI\.\s?G\.\b"
+    r"|centers\s+for\s+medicare\s*&?\s*(?:and\s*)?medicaid\s+services|\bCMS\b"
+    r"|health\s+care\s+financing\s+administration|\bHCFA\b"
+    r"|administration\s+for\s+children\s+and\s+families|\bACF\b"
+    r"|office\s+of\s+human\s+development\s+services|\bOHDS\b"
+    r"|office\s+of\s+research\s+integrity|\bORI\b"
+    r"|department\s+of\s+health\s+and\s+human\s+services"
+    r"|\bCTP\b|center\s+for\s+tobacco\s+products|\bFDA\b|food\s+and\s+drug\s+administration",
+    re.IGNORECASE)
+_TRAILING_ROLE = re.compile(
+    r",?\s*(?:Petitioner|Respondent|Appellant|Appellee)\.?\s*$", re.IGNORECASE)
+_IN_RE = re.compile(r"^(?:in\s+the\s+matter\s+of|in\s+re)\s+", re.IGNORECASE)
+
+
+def party_name_from_caption(caption: str | None) -> str | None:
+    """The non-government party's name from an index caption, best-effort."""
+    if not caption:
+        return None
+    text = _CAPTION_PREFIX.sub("", caption).strip()
+    text = _DECISION_NO_TOKEN.sub("", text, count=1).strip()
+    text = _IN_RE.sub("", text)
+    parts = _VS.split(text, maxsplit=1)
+    if len(parts) == 2:
+        a, b = (p.strip() for p in parts)
+        a_govt, b_govt = bool(_GOVT_PARTY.search(a)), bool(_GOVT_PARTY.search(b))
+        text = b if (a_govt and not b_govt) else a
+    text = _TRAILING_ROLE.sub("", text).strip().strip(",.;: ")
+    return text or None
+
+
+def load_party_names(index_path: Path) -> dict[str, str]:
+    """"division#decision_no" -> party name. A number the Board lists twice
+    cannot identify a caption, so -- same rule build_dataset.py's own
+    index_lookup() follows -- a key seen with two different captions is
+    dropped rather than guessed at."""
+    if not index_path.exists():
+        return {}
+    lookup: dict[str, str] = {}
+    ambiguous: set[str] = set()
+    for r in jsonl.read(index_path):
+        if not r.get("decision_no"):
+            continue
+        key = f"{r['division']}#{r['decision_no']}".lower()
+        name = party_name_from_caption(r.get("caption"))
+        if not name:
+            continue
+        if key in lookup and lookup[key] != name:
+            ambiguous.add(key)
+        else:
+            lookup[key] = name
+    for key in ambiguous:
+        lookup.pop(key, None)
+    return lookup
 
 # fields.judges() finds a real name in the source text, but the text itself is
 # sometimes wrong: a signature line's kerning gets read as a stray mid-word
@@ -174,6 +251,7 @@ SITE_SCHEMA = pa.schema([
     ("year", pa.int16()),
     ("tribunal", pa.string()),
     ("respondent", pa.string()),
+    ("party_name", pa.string()),
     ("judges", pa.list_(pa.string())),
     ("dispositions", pa.list_(pa.string())),
     ("provider_ids", pa.list_(pa.string())),
@@ -204,9 +282,10 @@ def load_categories(slices_path: Path, labels: dict[str, str]) -> dict[str, list
     return {k: sorted(v) for k, v in out.items()}
 
 
-def build(out_dir: Path) -> pa.Table:
+def build(out_dir: Path, index_path: Path = Path("decisions_index.jsonl")) -> pa.Table:
     labels = category_labels(Path("categories.yaml"))
     cat_by_id = load_categories(out_dir / "slices.parquet", labels)
+    party_by_key = load_party_names(index_path)
 
     rows = []
     for corpus in ("alj", "dab"):
@@ -227,6 +306,8 @@ def build(out_dir: Path) -> pa.Table:
         for row in t.to_pylist():
             row["categories"] = cat_by_id.get(row["id"], [])
             row["judges"] = normalize_judges(row["judges"])
+            key = f"{corpus}#{row['decision_no']}".lower() if row["decision_no"] else None
+            row["party_name"] = party_by_key.get(key) if key else None
             rows.append(row)
 
     cols = {f.name: [r[f.name] for r in rows] for f in SITE_SCHEMA}

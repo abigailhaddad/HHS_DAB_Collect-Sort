@@ -9,15 +9,21 @@ const PARQUET_URL = './data/decisions.parquet';
 
 const TRIBUNAL_LABEL = { alj: 'ALJ (Civil Remedies)', dab: 'Appellate Division' };
 
+// "Party" (party_name, from the Board's own index caption) is who the case is
+// actually about -- a doctor, a facility, a retailer. "Federal Office"
+// (respondent) is only ever one of ~7 government offices (CMS, the Inspector
+// General, FDA's tobacco arm, ...) -- a useful secondary filter, never the
+// answer to "who is this case about".
 const CATEGORY_COLUMNS = [
   { label: 'Decision #', field: 'decision_no', filterType: 'text', index: 0 },
   { label: 'Tribunal', field: 'corpus', filterType: 'multiselect', index: 1 },
   { label: 'Year', field: 'year', filterType: 'multiselect', index: 2 },
-  { label: 'Respondent', field: 'respondent', filterType: 'text', index: 4 },
-  { label: 'Category', field: 'categories', filterType: 'multiselect', index: 5 },
-  { label: 'Disposition', field: 'dispositions', filterType: 'multiselect', index: 6 },
-  { label: 'Judges', field: 'judges', filterType: 'multiselect', index: 7 },
-  { label: 'Provider IDs', field: 'provider_ids', filterType: 'text', index: 8 },
+  { label: 'Party', field: 'party_name', filterType: 'text', index: 4 },
+  { label: 'Federal Office', field: 'respondent', filterType: 'multiselect', index: 5 },
+  { label: 'Category', field: 'categories', filterType: 'multiselect', index: 6 },
+  { label: 'Disposition', field: 'dispositions', filterType: 'multiselect', index: 7 },
+  { label: 'Judges', field: 'judges', filterType: 'multiselect', index: 8 },
+  { label: 'Provider IDs', field: 'provider_ids', filterType: 'text', index: 9 },
 ];
 
 // DuckDB-WASM hands back Arrow list columns as Vector-like objects, not plain
@@ -39,6 +45,71 @@ function escapeHtml(s) {
   }[c]));
 }
 
+// "How often does the Appellate Division reverse the ALJ?" is answerable in
+// one query already -- an Appellate decision's own dispositions column is
+// what it did on review -- but nothing on the page ever asked it. Coverage
+// is the same 29.6% dispositions has everywhere else (fields.py only labels
+// a decision from unambiguous first-person language, "we affirm"/"we
+// reverse", never from a mention of the word), so the caveat travels with
+// the number rather than presenting a rate over an unstated denominator.
+async function renderAppealOutcomes(conn, t) {
+  const el = document.getElementById('appealOutcomes');
+  if (!el) return;
+  const rows = await query(conn, `
+    SELECT outcome, COUNT(*) AS n FROM (
+      SELECT unnest(dispositions) AS outcome
+      FROM ${t} WHERE corpus = 'dab' AND reviews_decision_no IS NOT NULL
+    ) GROUP BY outcome ORDER BY n DESC
+  `);
+  const [{ n: reviewed }] = await query(conn, `
+    SELECT COUNT(*) AS n FROM ${t} WHERE corpus = 'dab' AND reviews_decision_no IS NOT NULL
+  `);
+  const labeled = rows.reduce((s, r) => s + Number(r.n), 0);
+  if (!rows.length) {
+    el.innerHTML = '<p class="text-muted small">No stated outcomes found.</p>';
+    return;
+  }
+  el.innerHTML = `
+    <h3>Appeal outcomes</h3>
+    <ul class="outcome-list">
+      ${rows.map((r) => `<li><span class="outcome-label">${escapeHtml(r.outcome)}</span>
+        <span class="outcome-count">${Number(r.n).toLocaleString()}</span></li>`).join('')}
+    </ul>
+    <p class="text-muted small">Stated outcome found for ${labeled.toLocaleString()} of
+      ${Number(reviewed).toLocaleString()} Appellate decisions that name the ALJ decision
+      they reviewed. The rest don't use first-person language ("we affirm"/"we reverse")
+      unambiguous enough to label -- not necessarily an unstated outcome.</p>
+  `;
+}
+
+// "Is the Board issuing fewer decisions in recent years" needs a per-year
+// breakdown the four header stat cards don't give (just one overall total
+// and one overall date range). A plain CSS bar chart -- div heights scaled
+// to the max -- needs nothing this static site doesn't already have.
+async function renderVolumeByYear(conn, t) {
+  const el = document.getElementById('volumeByYear');
+  if (!el) return;
+  const rows = await query(conn, `
+    SELECT year, COUNT(*) AS n FROM ${t}
+    WHERE year IS NOT NULL GROUP BY year ORDER BY year
+  `);
+  if (!rows.length) return;
+  const max = Math.max(...rows.map((r) => Number(r.n)));
+  el.innerHTML = `
+    <h3>Decisions by year</h3>
+    <div class="year-bars">
+      ${rows.map((r) => {
+        const n = Number(r.n);
+        const pct = Math.max(2, Math.round((n / max) * 100));
+        return `<div class="year-bar" title="${r.year}: ${n.toLocaleString()}">
+          <div class="year-bar-fill" style="height:${pct}%"></div>
+          <div class="year-bar-label">${String(r.year).slice(2)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
 async function main() {
   const conn = await initDb(PARQUET_URL);
   const t = tableRef(conn);
@@ -46,26 +117,53 @@ async function main() {
   const rows = await query(conn, `
     SELECT id, decision_no, corpus, year,
            CAST(decision_date AS VARCHAR) AS decision_date,
-           respondent, judges, dispositions, provider_ids, categories, source_url
+           party_name, respondent, judges, dispositions, provider_ids,
+           categories, source_url, reviews_decision_no, appealed_in
     FROM ${t}
     ORDER BY decision_date DESC NULLS LAST
   `);
 
-  const tableData = rows.map((r) => [
-    r.decision_no || '',
-    TRIBUNAL_LABEL[r.corpus] || r.corpus,
-    r.year,
-    r.decision_date || '',
-    r.respondent || '',
-    joined(r.categories),
-    joined(r.dispositions),
-    joined(r.judges),
-    toArr(r.provider_ids).join(', '),
-    `<a class="view-link" data-id="${escapeHtml(r.id)}">View</a>`,
-    r.source_url
-      ? `<a href="${escapeHtml(r.source_url)}" target="_blank" rel="noopener">Source &#8599;</a>`
-      : '',
-  ]);
+  // "Related Decisions": an ALJ decision's own reviews_decision_no (the
+  // Appellate decision reviewing it) plus an Appellate decision's own
+  // appealed_in (the ALJ decisions it names) -- link_corpora.py computed both
+  // exactly, from an actual match rather than a heuristic, but neither was
+  // reachable from the UI before. Each number is a live link: clicking it
+  // reuses the existing Decision # text filter rather than a new query.
+  const relatedNumbers = (r) => {
+    const nums = new Set(toArr(r.appealed_in));
+    if (r.reviews_decision_no) nums.add(r.reviews_decision_no);
+    return Array.from(nums);
+  };
+  const relatedHtml = (nums) => nums.map((n) =>
+    `<a class="related-link" data-no="${escapeHtml(n)}">${escapeHtml(n)}</a>`).join(' | ');
+
+  const tableData = rows.map((r) => {
+    const related = relatedNumbers(r);
+    return [
+      r.decision_no || '',
+      TRIBUNAL_LABEL[r.corpus] || r.corpus,
+      r.year,
+      r.decision_date || '',
+      r.party_name || '',
+      r.respondent || '',
+      joined(r.categories),
+      joined(r.dispositions),
+      joined(r.judges),
+      toArr(r.provider_ids).join(', '),
+      relatedHtml(related),
+      `<a class="view-link" data-id="${escapeHtml(r.id)}">View</a>`,
+      r.source_url
+        ? `<a href="${escapeHtml(r.source_url)}" target="_blank" rel="noopener">Source &#8599;</a>`
+        : '',
+      // Plain-text shadow copies for CSV export only -- not rendered, not
+      // given a <th> or a `columns:` entry below, so DataTables never shows
+      // them, but table.row(node).data() still returns them by index.
+      related.join('; '),
+      r.source_url || '',
+      r.id,
+    ];
+  });
+  const ID_COLUMN = 15;
 
   const [stats] = await query(conn, `
     SELECT COUNT(*) AS total,
@@ -84,14 +182,18 @@ async function main() {
   document.getElementById('statDateRange').textContent =
     stats.min_date && stats.max_date ? `${stats.min_date} – ${stats.max_date}` : '–';
 
-  initDataTableWithFilters({
+  await renderAppealOutcomes(conn, t);
+  await renderVolumeByYear(conn, t);
+
+  const { table } = initDataTableWithFilters({
     tableSelector: '#decisionsTable',
     tableOptions: {
       data: tableData,
       columns: [
         { data: 0 }, { data: 1 }, { data: 2 }, { data: 3 }, { data: 4 },
-        { data: 5 }, { data: 6 }, { data: 7 }, { data: 8 },
-        { data: 9, orderable: false }, { data: 10, orderable: false },
+        { data: 5 }, { data: 6 }, { data: 7 }, { data: 8 }, { data: 9 },
+        { data: 10, orderable: false }, { data: 11, orderable: false },
+        { data: 12, orderable: false },
       ],
       order: [[3, 'desc']],
       pageLength: 25,
@@ -99,6 +201,68 @@ async function main() {
     fieldTypes: Object.fromEntries(CATEGORY_COLUMNS.map((c) => [c.field, c.filterType])),
     columns: CATEGORY_COLUMNS,
     csvFilename: 'hhs_dab_decisions.csv',
+    csvColumns: [
+      { header: 'Decision #', getData: (n, d) => d[0] },
+      { header: 'Tribunal', getData: (n, d) => d[1] },
+      { header: 'Year', getData: (n, d) => d[2] },
+      { header: 'Date', getData: (n, d) => d[3] },
+      { header: 'Party', getData: (n, d) => d[4] },
+      { header: 'Federal Office', getData: (n, d) => d[5] },
+      { header: 'Category', getData: (n, d) => d[6] },
+      { header: 'Disposition', getData: (n, d) => d[7] },
+      { header: 'Judges', getData: (n, d) => d[8] },
+      { header: 'Provider IDs', getData: (n, d) => d[9] },
+      { header: 'Related Decisions', getData: (n, d) => d[13] },
+      { header: 'Source URL', getData: (n, d) => d[14] },
+    ],
+  });
+
+  // Clicking a related-decision number jumps to it via the Decision # text
+  // filter that already exists -- no new query, no new UI, just reusing the
+  // filter the column-search box already drives.
+  $('#decisionsTable tbody').on('click', 'a.related-link', (e) => {
+    table.column(0).search(e.target.getAttribute('data-no')).draw();
+    document.querySelector('.table-scroll-wrapper')?.scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // Full-text search: the decision text is already resident in the
+  // in-browser DuckDB table (it's in the Parquet; the main SELECT above just
+  // never asked for it), so a keyword search is one more query away rather
+  // than a whole new feature. ILIKE over ~10K in-memory rows, no FTS
+  // extension needed at this size. Matching ids drive a custom DataTables
+  // search predicate rather than a new table -- everything else (column
+  // filters, sort, CSV export) keeps working on top of it.
+  let fulltextIds = null; // null = no full-text filter active
+  // `data` (2nd param) only covers the columns configured above (13 of
+  // them); the shadow columns (id at 15) only survive on `rowData` (4th
+  // param), the untouched original array from tableData.
+  $.fn.dataTable.ext.search.push((settings, data, index, rowData) => {
+    if (settings.nTable !== table.table().node()) return true;
+    return fulltextIds === null || fulltextIds.has(rowData[ID_COLUMN]);
+  });
+
+  const searchInput = document.getElementById('fulltextSearch');
+  const statusEl = document.getElementById('fulltextStatus');
+  let searchTimer = null;
+  searchInput?.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    const term = searchInput.value.trim();
+    searchTimer = setTimeout(async () => {
+      if (!term) {
+        fulltextIds = null;
+        statusEl.textContent = '';
+        table.draw();
+        return;
+      }
+      statusEl.textContent = 'searching…';
+      const matches = await query(conn,
+        `SELECT id FROM ${t} WHERE text ILIKE '%' || ? || '%' LIMIT 2000`, [term]);
+      fulltextIds = new Set(matches.map((m) => m.id));
+      statusEl.textContent = matches.length >= 2000
+        ? '2,000+ decisions match (showing first 2,000)'
+        : `${matches.length.toLocaleString()} decision(s) match`;
+      table.draw();
+    }, 400);
   });
 
   // PDF extraction preserves the source layout verbatim: "Page 2" etc. gets
