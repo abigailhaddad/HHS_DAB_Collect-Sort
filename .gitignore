@@ -5,3 +5,10 @@ manifest_*.json
 out/
 __pycache__/
 .DS_Store
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example

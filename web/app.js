@@ -1,11 +1,11 @@
 import { initDb, query, tableRef } from './db.js';
 
-// Swap this for the R2 URL once the file is uploaded there (Cloudflare Pages
-// caps a single static asset at 25 MiB on the Free plan; this file is ~63 MB,
-// same reason usajobs_historical serves its Parquet from R2 instead of the
-// Pages deploy itself). Relative path works for local dev via
-// `python3 -m http.server`.
-const PARQUET_URL = './data/decisions.parquet';
+// Served from R2, not the Pages deploy: Cloudflare Pages caps a single
+// static asset at 25 MiB on the Free plan, and this file is ~63 MB -- the
+// same reason usajobs_historical serves its Parquet from R2 too. Re-upload
+// with `python3 build_web_data.py && python3 upload_web_data.py` whenever
+// the corpus changes; this URL doesn't need to.
+const PARQUET_URL = 'https://pub-c5d2b03a812741a9b9281604ce41cf7b.r2.dev/decisions.parquet';
 
 const TRIBUNAL_LABEL = { alj: 'ALJ (Civil Remedies)', dab: 'Appellate Division' };
 
