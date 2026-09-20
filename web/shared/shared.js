@@ -247,6 +247,7 @@ class ColumnFilterManager {
     _openFilterDialog(col, colIndex) {
         if (col.type === 'multiselect') this._openMultiselectDialog(col, colIndex);
         else if (col.type === 'range') this._openRangeDialog(col, colIndex);
+        else if (col.type === 'fulltext') this._openFulltextDialog(col, colIndex);
         else this._openTextDialog(col, colIndex);
     }
 
@@ -365,6 +366,54 @@ class ColumnFilterManager {
         });
     }
 
+    /**
+     * Same dialog as a plain text filter, but for a column with no real
+     * DataTable data to run a synchronous substring search against -- full
+     * text living in an in-memory DuckDB table, say. `col.onApply(value)` is
+     * awaited and does the actual matching (e.g. running a query and driving
+     * a custom $.fn.dataTable.ext.search predicate); this method only owns
+     * the popover, the filter chip, and URL sync, same as every other type.
+     */
+    _openFulltextDialog(col, colIndex) {
+        const self = this;
+        const currentValue = (this.activeFilters[colIndex] || {}).value || '';
+
+        const content = `
+            <div class="filter-popover">
+                <div class="filter-title">Filter: ${escapeHtml(col.name)}</div>
+                <input type="text" class="form-control form-control-sm filter-text-input mb-1" placeholder="Enter search term..." value="${escapeHtml(currentValue)}">
+                <div class="d-flex gap-2 justify-content-end mt-3">
+                    <button class="btn btn-sm btn-outline-secondary btn-filter-clear">Clear</button>
+                    <button class="btn btn-sm btn-primary btn-filter-apply">Apply</button>
+                </div>
+            </div>
+        `;
+
+        const modal = createModal({ content });
+        const $popover = $(modal).find('.filter-popover');
+        const $input = $popover.find('.filter-text-input');
+        $input.focus();
+        $input.on('keypress', e => { if (e.key === 'Enter') $popover.find('.btn-filter-apply').click(); });
+
+        $popover.find('.btn-filter-clear').on('click', async () => {
+            delete self.activeFilters[colIndex];
+            await col.onApply('');
+            self._updateFilterBar();
+            if (self.syncURL) self._updateURL();
+            closeModal(modal);
+        });
+
+        $popover.find('.btn-filter-apply').on('click', async () => {
+            const value = $input.val().trim();
+            if (value) self.activeFilters[colIndex] = { type: 'fulltext', value, name: col.name };
+            else delete self.activeFilters[colIndex];
+            await col.onApply(value);
+            self._updateFilterBar();
+            if (self.syncURL) self._updateURL();
+            closeModal(modal);
+        });
+    }
+
     _openRangeDialog(col, colIndex) {
         const self = this;
         const cur = this.activeFilters[colIndex] || {};
@@ -432,6 +481,13 @@ class ColumnFilterManager {
         const hasFilters = Object.keys(this.activeFilters).length > 0;
         const hasSearchChip = filterBar.querySelector('#search-chip') !== null;
 
+        // The empty-state span is static markup the page ships with, not
+        // something this class ever created -- so unlike the label and
+        // chips above, it has to be toggled rather than always removed and
+        // conditionally rebuilt, or it sits there next to real chips.
+        const emptyState = filterBar.querySelector('.filters-bar-empty');
+        if (emptyState) emptyState.style.display = (hasFilters || hasSearchChip) ? 'none' : '';
+
         if (hasFilters || hasSearchChip) {
             const label = document.createElement('span');
             label.className = 'bar-label filter-label';
@@ -461,7 +517,13 @@ class ColumnFilterManager {
                 `;
                 chip.querySelector('.filter-chip-remove').addEventListener('click', () => {
                     delete this.activeFilters[colIndex];
-                    this.table.column(parseInt(colIndex)).search('').draw();
+                    if (filter.type === 'fulltext') {
+                        const col = this.columns.find(c => c.index === parseInt(colIndex));
+                        if (col?.onApply) col.onApply('');
+                        this.table.draw();
+                    } else {
+                        this.table.column(parseInt(colIndex)).search('').draw();
+                    }
                     this._updateFilterBar();
                     if (this.syncURL) this._updateURL();
                 });
@@ -471,8 +533,13 @@ class ColumnFilterManager {
     }
 
     clearAll() {
-        Object.keys(this.activeFilters).forEach(colIndex => {
-            this.table.column(parseInt(colIndex)).search('');
+        Object.entries(this.activeFilters).forEach(([colIndex, filter]) => {
+            if (filter.type === 'fulltext') {
+                const col = this.columns.find(c => c.index === parseInt(colIndex));
+                if (col?.onApply) col.onApply('');
+            } else {
+                this.table.column(parseInt(colIndex)).search('');
+            }
         });
         this.activeFilters = {};
         this._updateFilterBar();
@@ -521,7 +588,13 @@ class ColumnFilterManager {
             this.activeFilters[idx] = filter;
             if (filter.type === 'multiselect')
                 this.table.column(idx).search(filter.values.map(v => escapeRegex(v)).join('|'), true, false);
-            else if (filter.type !== 'range')
+            else if (filter.type === 'fulltext') {
+                // Async and column-less: fire it, don't block the rest of
+                // this restore on a DB round trip the way every other type
+                // doesn't need to.
+                const col = this.columns.find(c => c.index === idx);
+                if (col?.onApply) col.onApply(filter.value);
+            } else if (filter.type !== 'range')
                 this.table.column(idx).search(filter.value);
         });
         this._updateFilterBar();
@@ -558,6 +631,11 @@ class ColumnFilterManager {
                 const max = parts[1] ? parseFloat(parts[1]) : null;
                 if (min !== null || max !== null)
                     this.activeFilters[col.index] = { type: 'range', min, max, name: col.name };
+            } else if (col.type === 'fulltext') {
+                if (value) {
+                    this.activeFilters[col.index] = { type: 'fulltext', value, name: col.name };
+                    if (col.onApply) col.onApply(value);
+                }
             } else if (value) {
                 this.activeFilters[col.index] = { type: 'text', value, name: col.name };
                 this.table.column(col.index).search(value);
@@ -594,6 +672,7 @@ function buildColumnFilters(fieldTypes, columns) {
         if (filterType) {
             const entry = { index: col.index !== undefined ? col.index : i, name: col.label, type: filterType };
             if (col.sortFn) entry.sortFn = col.sortFn;
+            if (col.onApply) entry.onApply = col.onApply;
             result.push(entry);
         }
     });

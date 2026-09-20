@@ -89,14 +89,6 @@ a:hover { text-decoration-color: var(--color-accent); }
 
 .table-scroll-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-.fulltext-search-row {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-}
-.fulltext-search-row input { max-width: 420px; }
-
 .related-link, .view-link { cursor: pointer; }
 
 .panels-row {

@@ -185,8 +185,56 @@ async function main() {
   await renderAppealOutcomes(conn, t);
   await renderVolumeByYear(conn, t);
 
-  const { table } = initDataTableWithFilters({
+  // Full-text search behaves like every other filter -- it's in "+ Add
+  // Filter", it gets a chip in the filter bar, it survives Clear/copy-link
+  // -- rather than a box of its own, even though there's no real column
+  // behind it: the decision text is already resident in the in-browser
+  // DuckDB table (it's in the Parquet; the main SELECT above just never
+  // asked for it), so this is one query away rather than a new feature.
+  // shared.js's 'fulltext' filter type exists for exactly this case: a
+  // filter whose match can't be a synchronous per-cell substring test, so
+  // its dialog calls onApply(value) instead of table.column(i).search(value).
+  // `let table` (not `const`) because onApply is defined, and can be handed
+  // to initDataTableWithFilters, before the table it closes over exists --
+  // by the time onApply's body runs past its `await`, table is assigned.
+  let table;
+  let fulltextIds = null; // null = no full-text filter active
+  const FULLTEXT_INDEX = 100; // bookkeeping key only; no such DataTables column
+  async function applyFulltextFilter(term) {
+    if (!term) {
+      fulltextIds = null;
+      table.draw();
+      return;
+    }
+    const matches = await query(conn,
+      `SELECT id FROM ${t} WHERE text ILIKE '%' || ? || '%' LIMIT 2000`, [term]);
+    fulltextIds = new Set(matches.map((m) => m.id));
+    table.draw();
+  }
+  // `data` (2nd param) only covers the columns configured below (13 of
+  // them); the shadow columns (id at 15) only survive on `rowData` (4th
+  // param), the untouched original array from tableData.
+  $.fn.dataTable.ext.search.push((settings, data, index, rowData) => {
+    // DataTables runs an internal draw as part of its own construction --
+    // before initDataTableWithFilters below has returned and assigned
+    // `table` here. Nothing could be filtered yet at that point anyway.
+    if (!table || settings.nTable !== table.table().node()) return true;
+    return fulltextIds === null || fulltextIds.has(rowData[ID_COLUMN]);
+  });
+
+  const allColumns = [
+    ...CATEGORY_COLUMNS,
+    { label: 'Full Text', field: '_fulltext', filterType: 'fulltext',
+      index: FULLTEXT_INDEX, onApply: applyFulltextFilter },
+  ];
+
+  ({ table } = initDataTableWithFilters({
     tableSelector: '#decisionsTable',
+    // Without this, shared.js falls back to a random id and silently builds
+    // a second filter bar right above the table instead of using the one
+    // already in index.html -- chips render into that orphan, invisible
+    // wherever the page actually points a reader to look for them.
+    filterBarId: 'filtersBar',
     tableOptions: {
       data: tableData,
       columns: [
@@ -198,8 +246,8 @@ async function main() {
       order: [[3, 'desc']],
       pageLength: 25,
     },
-    fieldTypes: Object.fromEntries(CATEGORY_COLUMNS.map((c) => [c.field, c.filterType])),
-    columns: CATEGORY_COLUMNS,
+    fieldTypes: Object.fromEntries(allColumns.map((c) => [c.field, c.filterType])),
+    columns: allColumns,
     csvFilename: 'hhs_dab_decisions.csv',
     csvColumns: [
       { header: 'Decision #', getData: (n, d) => d[0] },
@@ -215,7 +263,7 @@ async function main() {
       { header: 'Related Decisions', getData: (n, d) => d[13] },
       { header: 'Source URL', getData: (n, d) => d[14] },
     ],
-  });
+  }));
 
   // Clicking a related-decision number jumps to it via the Decision # text
   // filter that already exists -- no new query, no new UI, just reusing the
@@ -223,46 +271,6 @@ async function main() {
   $('#decisionsTable tbody').on('click', 'a.related-link', (e) => {
     table.column(0).search(e.target.getAttribute('data-no')).draw();
     document.querySelector('.table-scroll-wrapper')?.scrollIntoView({ behavior: 'smooth' });
-  });
-
-  // Full-text search: the decision text is already resident in the
-  // in-browser DuckDB table (it's in the Parquet; the main SELECT above just
-  // never asked for it), so a keyword search is one more query away rather
-  // than a whole new feature. ILIKE over ~10K in-memory rows, no FTS
-  // extension needed at this size. Matching ids drive a custom DataTables
-  // search predicate rather than a new table -- everything else (column
-  // filters, sort, CSV export) keeps working on top of it.
-  let fulltextIds = null; // null = no full-text filter active
-  // `data` (2nd param) only covers the columns configured above (13 of
-  // them); the shadow columns (id at 15) only survive on `rowData` (4th
-  // param), the untouched original array from tableData.
-  $.fn.dataTable.ext.search.push((settings, data, index, rowData) => {
-    if (settings.nTable !== table.table().node()) return true;
-    return fulltextIds === null || fulltextIds.has(rowData[ID_COLUMN]);
-  });
-
-  const searchInput = document.getElementById('fulltextSearch');
-  const statusEl = document.getElementById('fulltextStatus');
-  let searchTimer = null;
-  searchInput?.addEventListener('input', () => {
-    clearTimeout(searchTimer);
-    const term = searchInput.value.trim();
-    searchTimer = setTimeout(async () => {
-      if (!term) {
-        fulltextIds = null;
-        statusEl.textContent = '';
-        table.draw();
-        return;
-      }
-      statusEl.textContent = 'searching…';
-      const matches = await query(conn,
-        `SELECT id FROM ${t} WHERE text ILIKE '%' || ? || '%' LIMIT 2000`, [term]);
-      fulltextIds = new Set(matches.map((m) => m.id));
-      statusEl.textContent = matches.length >= 2000
-        ? '2,000+ decisions match (showing first 2,000)'
-        : `${matches.length.toLocaleString()} decision(s) match`;
-      table.draw();
-    }, 400);
   });
 
   // PDF extraction preserves the source layout verbatim: "Page 2" etc. gets
