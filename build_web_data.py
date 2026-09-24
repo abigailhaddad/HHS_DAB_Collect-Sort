@@ -304,7 +304,11 @@ def build(out_dir: Path, index_path: Path = Path("decisions_index.jsonl")) -> pa
         cols.append("appealed_in")
         t = t.select(cols)
         for row in t.to_pylist():
-            row["categories"] = cat_by_id.get(row["id"], [])
+            # A decision with no category match is real signal (the slicer
+            # didn't recognize it, not that it was excluded) -- give it its
+            # own filterable value instead of leaving it unreachable by any
+            # Category filter and invisible in the "Categories" count.
+            row["categories"] = cat_by_id.get(row["id"]) or ["Unlabeled"]
             row["judges"] = normalize_judges(row["judges"])
             key = f"{corpus}#{row['decision_no']}".lower() if row["decision_no"] else None
             row["party_name"] = party_by_key.get(key) if key else None
