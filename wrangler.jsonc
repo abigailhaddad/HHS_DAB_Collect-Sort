@@ -7,5 +7,8 @@
   },
   "assets": {
     "directory": "web"
-  }
+  },
+  "routes": [
+    { "pattern": "hhs-dab.abigailhaddad.com", "custom_domain": true }
+  ]
 }
