@@ -15,10 +15,19 @@ The Archive's crawl of a year still in progress can sit for months between
 visits -- the 2026 index pages were captured once, in May, and nothing since.
 That's invisible to the loss check above because it never reads as zero: 33
 decisions is a perfectly plausible-looking answer for a year that has actually
-published 196. --cdp tops up the current year(s) from a real, hand-started
-Chrome (see fetch_via_browser.py) rather than from that stale snapshot.
+published 196. --cdp (attach to a Chrome you started by hand) or
+--launch-browser (a throwaway one, headless=False, for CI) tops up the
+current year(s) live instead of trusting that stale snapshot.
 
     python collect_index.py --out decisions_index.jsonl --cdp http://localhost:9222
+    python collect_index.py --out decisions_index.jsonl --launch-browser
+
+--launch-browser works unattended -- confirmed against hhs.gov itself, same
+as the dod repo's scrape.py already runs daily against war.gov -- because
+Akamai's block here keys off headless indicators, not the deeper page-level
+fingerprinting Cloudflare's challenge does; a real Chrome (headless=False,
+just running under Xvfb in CI with no display of its own) reads the same as
+one a person is sitting in front of. --cdp remains for interactive local use.
 """
 from __future__ import annotations
 
@@ -140,9 +149,13 @@ def main() -> int:
                          "--remote-debugging-port; tops up --live-years of "
                          "the index live instead of trusting the Archive's "
                          "snapshot of a year still being published")
+    ap.add_argument("--launch-browser", action="store_true",
+                    help="same live top-up as --cdp, but launches its own "
+                         "throwaway headless=False Chrome instead of "
+                         "attaching to one you started -- for CI, under Xvfb")
     ap.add_argument("--live-years", type=int, default=1,
                     help="how many years back from --to-year to top up "
-                         "live when --cdp is set")
+                         "live when --cdp or --launch-browser is set")
     args = ap.parse_args()
 
     baseline = {}
@@ -187,17 +200,20 @@ def main() -> int:
             by_key[f"{division}:{year}"] = found
             print(f"{division} {year}: {len(found)}", flush=True)
 
-    if args.cdp:
+    if args.cdp or args.launch_browser:
         from playwright.sync_api import sync_playwright
 
         live_from = args.to_year - args.live_years + 1
         with sync_playwright() as pw:
-            browser = pw.chromium.connect_over_cdp(args.cdp)
-            if not browser.contexts:
-                print("no browser context; is Chrome running with "
-                      "--remote-debugging-port?")
-                return 1
-            browser_page = browser.contexts[0].new_page()
+            if args.cdp:
+                browser = pw.chromium.connect_over_cdp(args.cdp)
+                if not browser.contexts:
+                    print("no browser context; is Chrome running with "
+                          "--remote-debugging-port?")
+                    return 1
+            else:
+                browser = pw.chromium.launch(headless=False)
+            browser_page = browser.new_page()
             try:
                 for division in DIVISIONS:
                     for year in range(max(args.from_year or FIRST_YEAR[division],
