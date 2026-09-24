@@ -2,3 +2,6 @@
 pypdf==6.9.2          # PDF text layer
 pyarrow==23.0.1       # Parquet
 PyYAML==6.0.3         # categories.yaml
+playwright==1.58.0    # the live browser top-up: collect_index.py, fetch_via_browser.py
+huggingface_hub==1.4.1  # push/pull the published corpus
+boto3==1.42.88        # upload web/data/decisions.parquet to R2

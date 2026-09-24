@@ -68,7 +68,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("records", type=Path, help="JSONL with url/year fields")
     ap.add_argument("--out-dir", type=Path, default=Path("decisions"))
-    ap.add_argument("--cdp", default="http://localhost:9222")
+    ap.add_argument("--cdp", default=None,
+                    help="http://localhost:9222 of a Chrome you started; "
+                         "default if neither this nor --launch-browser is given")
+    ap.add_argument("--launch-browser", action="store_true",
+                    help="launch a throwaway headless=False Chrome instead "
+                         "of attaching to one you started -- for CI, under "
+                         "Xvfb. Confirmed against hhs.gov directly: Akamai's "
+                         "block here keys off headless indicators, not the "
+                         "deeper fingerprinting Cloudflare's CDP-attach "
+                         "workaround exists for.")
     ap.add_argument("--delay", type=float, default=1.5)
     args = ap.parse_args()
 
@@ -80,12 +89,15 @@ def main() -> int:
     got = skipped = failed = 0
 
     with sync_playwright() as pw, failures.open("a", encoding="utf-8") as flog:
-        browser = pw.chromium.connect_over_cdp(args.cdp)
-        if not browser.contexts:
-            print("no browser context; is Chrome running with "
-                  "--remote-debugging-port?")
-            return 1
-        page = browser.contexts[0].new_page()
+        if args.launch_browser:
+            browser = pw.chromium.launch(headless=False)
+        else:
+            browser = pw.chromium.connect_over_cdp(args.cdp or "http://localhost:9222")
+            if not browser.contexts:
+                print("no browser context; is Chrome running with "
+                      "--remote-debugging-port?")
+                return 1
+        page = browser.new_page()
         try:
             for i, rec in enumerate(records, 1):
                 dest = args.out_dir / out_name(rec)
