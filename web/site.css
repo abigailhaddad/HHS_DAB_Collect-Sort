@@ -102,6 +102,12 @@ a:hover { text-decoration-color: var(--color-accent); }
     border: 1px solid var(--color-border);
     border-radius: var(--card-radius);
     padding: var(--card-padding);
+    /* The two panels sit in the same grid row, so a CSS grid stretches the
+       shorter one (this chart) to match the taller one (the outcomes list's
+       text). Without flex here that extra height was just blank space below
+       a chart fixed at 90px; flex-growing .year-bars fills it instead. */
+    display: flex;
+    flex-direction: column;
 }
 .panel h3 {
     font-size: 0.875rem;
@@ -129,7 +135,8 @@ a:hover { text-decoration-color: var(--color-accent); }
     display: flex;
     align-items: flex-end;
     gap: 2px;
-    height: 90px;
+    flex: 1;
+    min-height: 90px;
 }
 .year-bar {
     flex: 1;
