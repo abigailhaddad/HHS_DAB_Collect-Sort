@@ -102,23 +102,29 @@ function renderStats(agg) {
 function renderAppealOutcomes(agg) {
   const el = document.getElementById('appealOutcomes');
   if (!el) return;
-  const rows = Array.from(agg.outcomeCounts.entries()).sort((a, b) => b[1] - a[1]);
-  const labeled = rows.reduce((s, [, n]) => s + n, 0);
-  if (!rows.length) {
-    el.innerHTML = '<h3>Appeal outcomes</h3><p class="text-muted small">No stated outcomes among the current filter.</p>';
+  if (!agg.reviewed) {
+    el.innerHTML = '<h3>Appeal outcomes</h3><p class="text-muted small">No Appellate decisions among the current filter name the ALJ decision they reviewed.</p>';
     return;
   }
+  const rows = Array.from(agg.outcomeCounts.entries()).sort((a, b) => b[1] - a[1]);
+  const labeled = rows.reduce((s, [, n]) => s + n, 0);
+  const unclear = agg.reviewed - labeled;
+  // Not a real disposition -- the tribunal didn't say anything ambiguous
+  // enough to skip labeling, fields.py just found no unambiguous first-person
+  // language to label it from. Kept last regardless of count, the same way
+  // an "Other"/"Unknown" bucket sits apart from the real categories it sums
+  // against, rather than sorted in among them by size.
+  if (unclear > 0) rows.push(['Unclear', unclear]);
   el.innerHTML = `
     <h3>Appeal outcomes</h3>
     <ul class="outcome-list">
       ${rows.map(([outcome, n]) => `<li><span class="outcome-label">${escapeHtml(outcome)}</span>
         <span class="outcome-count">${n.toLocaleString()}</span></li>`).join('')}
     </ul>
-    <p class="text-muted small">Stated outcome found for ${labeled.toLocaleString()} of
-      ${agg.reviewed.toLocaleString()} Appellate decisions (matching the current filter) that
-      name the ALJ decision they reviewed. The rest don't use first-person language
-      ("we affirm"/"we reverse") unambiguous enough to label -- not necessarily an unstated
-      outcome.</p>
+    <p class="text-muted small">${agg.reviewed.toLocaleString()} Appellate decisions (matching
+      the current filter) name the ALJ decision they reviewed. "Unclear" means the decision
+      doesn't use first-person language ("we affirm"/"we reverse") unambiguous enough to
+      label -- not necessarily an unstated outcome.</p>
   `;
 }
 
