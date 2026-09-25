@@ -45,69 +45,115 @@ function escapeHtml(s) {
   }[c]));
 }
 
-// "How often does the Appellate Division reverse the ALJ?" is answerable in
-// one query already -- an Appellate decision's own dispositions column is
-// what it did on review -- but nothing on the page ever asked it. Coverage
-// is the same 29.6% dispositions has everywhere else (fields.py only labels
-// a decision from unambiguous first-person language, "we affirm"/"we
-// reverse", never from a mention of the word), so the caveat travels with
-// the number rather than presenting a rate over an unstated denominator.
-async function renderAppealOutcomes(conn, t) {
+// Stat cards and both panels describe "the rows currently on screen", not
+// the whole corpus -- same call dod's site makes -- so they're recomputed
+// from the DataTable's own filtered row set (rows({search:'applied'}),
+// already in memory, the same array the table itself draws from) on every
+// filter change, rather than re-queried from DuckDB. One pass over the
+// filtered rows computes all of it at once instead of three separate
+// queries, and it stays correct by construction: whatever the table shows
+// IS the aggregate.
+function computeAggregates(table) {
+  const rows = table.rows({ search: 'applied' }).data().toArray();
+  const categorySet = new Set();
+  const corpusSet = new Set();
+  const outcomeCounts = new Map();
+  const yearCounts = new Map();
+  let reviewed = 0;
+  let minDate = null, maxDate = null;
+
+  for (const r of rows) {
+    // r[6] is the rendered "A | B" string, not a real list -- split it back
+    // apart the same way the multiselect filter dialog already does.
+    (r[6] || '').split(' | ').forEach((c) => c && categorySet.add(c));
+    if (r[1]) corpusSet.add(r[1]);
+    if (r[3]) {
+      if (minDate === null || r[3] < minDate) minDate = r[3];
+      if (maxDate === null || r[3] > maxDate) maxDate = r[3];
+    }
+    if (r[16] === 'dab' && r[17]) {
+      reviewed += 1;
+      (r[7] || '').split(' | ').forEach((o) => {
+        if (o) outcomeCounts.set(o, (outcomeCounts.get(o) || 0) + 1);
+      });
+    }
+    if (r[2]) yearCounts.set(r[2], (yearCounts.get(r[2]) || 0) + 1);
+  }
+
+  return { total: rows.length, categorySet, corpusSet, outcomeCounts,
+          yearCounts, reviewed, minDate, maxDate };
+}
+
+function renderStats(agg) {
+  document.getElementById('statTotal').textContent = agg.total.toLocaleString();
+  document.getElementById('statTribunals').textContent = agg.corpusSet.size;
+  document.getElementById('statCategories').textContent = agg.categorySet.size;
+  document.getElementById('statDateRange').textContent =
+    agg.minDate && agg.maxDate ? `${agg.minDate} – ${agg.maxDate}` : '–';
+}
+
+// "How often does the Appellate Division reverse the ALJ?" is answerable
+// from a dispositions column that's already loaded -- but nothing on the
+// page ever asked it. Coverage is the same 29.6% dispositions has
+// everywhere else (fields.py only labels a decision from unambiguous
+// first-person language, "we affirm"/"we reverse", never from a mention of
+// the word), so the caveat travels with the number rather than presenting a
+// rate over an unstated denominator.
+function renderAppealOutcomes(agg) {
   const el = document.getElementById('appealOutcomes');
   if (!el) return;
-  const rows = await query(conn, `
-    SELECT outcome, COUNT(*) AS n FROM (
-      SELECT unnest(dispositions) AS outcome
-      FROM ${t} WHERE corpus = 'dab' AND reviews_decision_no IS NOT NULL
-    ) GROUP BY outcome ORDER BY n DESC
-  `);
-  const [{ n: reviewed }] = await query(conn, `
-    SELECT COUNT(*) AS n FROM ${t} WHERE corpus = 'dab' AND reviews_decision_no IS NOT NULL
-  `);
-  const labeled = rows.reduce((s, r) => s + Number(r.n), 0);
+  const rows = Array.from(agg.outcomeCounts.entries()).sort((a, b) => b[1] - a[1]);
+  const labeled = rows.reduce((s, [, n]) => s + n, 0);
   if (!rows.length) {
-    el.innerHTML = '<p class="text-muted small">No stated outcomes found.</p>';
+    el.innerHTML = '<h3>Appeal outcomes</h3><p class="text-muted small">No stated outcomes among the current filter.</p>';
     return;
   }
   el.innerHTML = `
     <h3>Appeal outcomes</h3>
     <ul class="outcome-list">
-      ${rows.map((r) => `<li><span class="outcome-label">${escapeHtml(r.outcome)}</span>
-        <span class="outcome-count">${Number(r.n).toLocaleString()}</span></li>`).join('')}
+      ${rows.map(([outcome, n]) => `<li><span class="outcome-label">${escapeHtml(outcome)}</span>
+        <span class="outcome-count">${n.toLocaleString()}</span></li>`).join('')}
     </ul>
     <p class="text-muted small">Stated outcome found for ${labeled.toLocaleString()} of
-      ${Number(reviewed).toLocaleString()} Appellate decisions that name the ALJ decision
-      they reviewed. The rest don't use first-person language ("we affirm"/"we reverse")
-      unambiguous enough to label -- not necessarily an unstated outcome.</p>
+      ${agg.reviewed.toLocaleString()} Appellate decisions (matching the current filter) that
+      name the ALJ decision they reviewed. The rest don't use first-person language
+      ("we affirm"/"we reverse") unambiguous enough to label -- not necessarily an unstated
+      outcome.</p>
   `;
 }
 
 // "Is the Board issuing fewer decisions in recent years" needs a per-year
-// breakdown the four header stat cards don't give (just one overall total
-// and one overall date range). A plain CSS bar chart -- div heights scaled
-// to the max -- needs nothing this static site doesn't already have.
-async function renderVolumeByYear(conn, t) {
+// breakdown the stat cards don't give on their own. A plain CSS bar chart --
+// div heights scaled to the max -- needs nothing this static site doesn't
+// already have.
+function renderVolumeByYear(agg) {
   const el = document.getElementById('volumeByYear');
   if (!el) return;
-  const rows = await query(conn, `
-    SELECT year, COUNT(*) AS n FROM ${t}
-    WHERE year IS NOT NULL GROUP BY year ORDER BY year
-  `);
-  if (!rows.length) return;
-  const max = Math.max(...rows.map((r) => Number(r.n)));
+  const years = Array.from(agg.yearCounts.entries()).sort((a, b) => a[0] - b[0]);
+  if (!years.length) {
+    el.innerHTML = '<h3>Decisions by year</h3><p class="text-muted small">No decisions match the current filter.</p>';
+    return;
+  }
+  const max = Math.max(...years.map(([, n]) => n));
   el.innerHTML = `
     <h3>Decisions by year</h3>
     <div class="year-bars">
-      ${rows.map((r) => {
-        const n = Number(r.n);
+      ${years.map(([year, n]) => {
         const pct = Math.max(2, Math.round((n / max) * 100));
-        return `<div class="year-bar" title="${r.year}: ${n.toLocaleString()}">
+        return `<div class="year-bar" title="${year}: ${n.toLocaleString()}">
           <div class="year-bar-fill" style="height:${pct}%"></div>
-          <div class="year-bar-label">${String(r.year).slice(2)}</div>
+          <div class="year-bar-label">${String(year).slice(2)}</div>
         </div>`;
       }).join('')}
     </div>
   `;
+}
+
+function renderAggregates(table) {
+  const agg = computeAggregates(table);
+  renderStats(agg);
+  renderAppealOutcomes(agg);
+  renderVolumeByYear(agg);
 }
 
 async function main() {
@@ -155,35 +201,22 @@ async function main() {
       r.source_url
         ? `<a href="${escapeHtml(r.source_url)}" target="_blank" rel="noopener">Source &#8599;</a>`
         : '',
-      // Plain-text shadow copies for CSV export only -- not rendered, not
-      // given a <th> or a `columns:` entry below, so DataTables never shows
-      // them, but table.row(node).data() still returns them by index.
+      // Plain-text shadow copies for CSV export -- not rendered, not given a
+      // <th> or a `columns:` entry below, so DataTables never shows them,
+      // but table.row(node).data() still returns them by index. The last
+      // two (raw corpus, raw reviews_decision_no) are what computeAggregates
+      // needs and the rendered columns don't carry: index 1 is the display
+      // label ("Appellate Division"), not the raw 'dab'/'alj' the appeal-
+      // outcomes filter checks against, and reviews_decision_no is folded
+      // into the merged "Related Decisions" display at index 10/13.
       related.join('; '),
       r.source_url || '',
       r.id,
+      r.corpus,
+      r.reviews_decision_no || '',
     ];
   });
   const ID_COLUMN = 15;
-
-  const [stats] = await query(conn, `
-    SELECT COUNT(*) AS total,
-           COUNT(DISTINCT corpus) AS tribunals,
-           CAST(MIN(decision_date) AS VARCHAR) AS min_date,
-           CAST(MAX(decision_date) AS VARCHAR) AS max_date
-    FROM ${t}
-  `);
-  const [{ n: categoryCount }] = await query(conn, `
-    SELECT COUNT(DISTINCT c) AS n
-    FROM ${t}, LATERAL (SELECT unnest(categories) AS c)
-  `);
-  document.getElementById('statTotal').textContent = Number(stats.total).toLocaleString();
-  document.getElementById('statTribunals').textContent = stats.tribunals;
-  document.getElementById('statCategories').textContent = categoryCount;
-  document.getElementById('statDateRange').textContent =
-    stats.min_date && stats.max_date ? `${stats.min_date} – ${stats.max_date}` : '–';
-
-  await renderAppealOutcomes(conn, t);
-  await renderVolumeByYear(conn, t);
 
   // Full-text search behaves like every other filter -- it's in "+ Add
   // Filter", it gets a chip in the filter bar, it survives Clear/copy-link
@@ -264,6 +297,13 @@ async function main() {
       { header: 'Source URL', getData: (n, d) => d[14] },
     ],
   }));
+
+  renderAggregates(table);
+  // search.dt fires when the filtered row set actually changes; plain 'draw'
+  // also fires on pagination and page-length changes, where the row set is
+  // identical and recomputing would be wasted work -- verified the same way
+  // dod's site did: 3 "next page" clicks fired draw 3 times, search.dt 0.
+  table.on('search.dt', () => renderAggregates(table));
 
   // Clicking a related-decision number jumps to it via the Decision # text
   // filter that already exists -- no new query, no new UI, just reusing the
@@ -373,9 +413,16 @@ async function main() {
     const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
     window.open(blobUrl, '_blank');
   });
+
+  document.getElementById('loadingBanner')?.remove();
 }
 
 main().catch((err) => {
   console.error(err);
   showToast('Failed to load decisions', true);
+  const banner = document.getElementById('loadingBanner');
+  if (banner) {
+    banner.classList.add('error');
+    banner.innerHTML = '<span>Failed to load decisions. Try refreshing the page.</span>';
+  }
 });

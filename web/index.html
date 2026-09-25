@@ -15,6 +15,13 @@
         .dataTables_wrapper .row { margin: 0; }
         .dataTables_wrapper .row > div { padding: 0; }
         .view-link { cursor: pointer; }
+        #loadingBanner {
+            display: flex; align-items: center; gap: 0.6rem;
+            padding: 0.75rem 1rem; margin-bottom: 1rem;
+            background: var(--color-bg); border: 1px solid var(--color-border);
+            border-radius: var(--card-radius); color: var(--color-text-muted);
+        }
+        #loadingBanner.error { color: #a94442; border-color: #a94442; }
     </style>
 </head>
 <body>
@@ -23,6 +30,11 @@
             <h1>HHS Departmental Appeals Board</h1>
             <p class="site-subtitle">Every published decision, 1974&ndash;present</p>
         </header>
+
+        <div id="loadingBanner">
+            <div class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+            <span>Loading 10,000+ decisions&hellip; a few seconds on first load.</span>
+        </div>
 
         <div id="toolbarButtons" class="toolbar-row"></div>
         <div class="filters-bar-container">
