@@ -120,3 +120,37 @@ def test_parses_the_flat_2017_era(index_pages):
 def test_the_flat_era_does_not_swallow_unrelated_files(index_pages):
     rows = ci.parse_index(index_pages["alj_2017"], "alj", 2017)
     assert not any("unrelated-report" in r["url"] for r in rows)
+
+
+def test_archive_budget_stops_the_walk_and_exits_nonzero(tmp_path, monkeypatch):
+    # A slow Archive used to run the job into its timeout: cancelled, no index,
+    # no message. With a budget, the walk stops, the rest is recorded as
+    # unfetched, and the exit status says the index is incomplete.
+    import json
+    import sys
+
+    monkeypatch.setattr(ci.archive, "snapshot_url", lambda url: None)
+    monkeypatch.setattr(ci.time, "sleep", lambda s: None)
+    clock = iter(range(0, 10_000, 100))          # each monotonic() call: +100s
+    monkeypatch.setattr(ci.time, "monotonic", lambda: next(clock))
+    out = tmp_path / "idx.jsonl"
+    monkeypatch.setattr(sys, "argv", [
+        "collect_index.py", "--out", str(out), "--from-year", "2020",
+        "--to-year", "2022", "--baseline", str(tmp_path / "none.json"),
+        "--archive-budget-minutes", "5"])
+    assert ci.main() == 1
+    meta = json.loads(out.with_suffix(".meta.json").read_text())
+    # every division-year is accounted for as unfetched, none silently dropped
+    assert len(meta["unfetched"]) == 2 * 3
+
+
+def test_no_budget_keeps_the_old_exit_status(tmp_path, monkeypatch):
+    import sys
+
+    monkeypatch.setattr(ci.archive, "snapshot_url", lambda url: None)
+    monkeypatch.setattr(ci.time, "sleep", lambda s: None)
+    monkeypatch.setattr(sys, "argv", [
+        "collect_index.py", "--out", str(tmp_path / "i.jsonl"),
+        "--from-year", "2020", "--to-year", "2020",
+        "--baseline", str(tmp_path / "none.json")])
+    assert ci.main() == 0

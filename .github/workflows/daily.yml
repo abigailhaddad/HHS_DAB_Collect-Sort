@@ -18,7 +18,7 @@ permissions:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -38,7 +38,11 @@ jobs:
       - run: python -m pytest tests/ -q
 
       - name: Rebuild the published index, topped up live
-        run: xvfb-run -a python collect_index.py --out decisions_index.jsonl --launch-browser
+        # The Archive walk is bounded (35 min) so a slow Archive fails this step
+        # with a message, with the live top-up done and the index uploaded as an
+        # artifact, instead of the whole job being cancelled at its timeout.
+        timeout-minutes: 50
+        run: xvfb-run -a python collect_index.py --out decisions_index.jsonl --launch-browser --archive-budget-minutes 35
 
       - name: Fail if any division-year lost decisions
         run: python check_index.py decisions_index.jsonl --baseline index_baseline.json
