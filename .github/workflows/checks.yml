@@ -1,0 +1,21 @@
+name: checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  run-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      # run_checks.py is the ledger of bugs found by hand; tests/ covers module
+      # contracts and the end-to-end run. Neither needs the corpus: the cases
+      # carry their text inline and test_pipeline.py generates its own PDFs.
+      # tests/test_data.py skips unless a built corpus is present.
+      - run: python run_checks.py
+      - run: python -m pytest tests/ -q

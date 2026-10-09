@@ -1,0 +1,6 @@
+# Only for `extract.py --ocr`, which also needs the tesseract binary on PATH
+# (brew install tesseract / apt install tesseract-ocr).
+-r requirements.txt
+PyMuPDF==1.27.2.3     # rasterizer; no system poppler needed
+pytesseract==0.3.13
+pillow==12.2.0

@@ -1,0 +1,237 @@
+# Categories: what each slice is, and how a decision is recognised as one.
+#
+# One entry per category. The pattern decides membership, the description and
+# citation travel with it into manifest_{corpus}.json, and the key is the slice
+# filename -- so all three stay in step by construction. They did not, once:
+# the counter called the fraud/kickback category "excl_b7_fraud_kickback" while
+# the manifest looked up "b7" and found nothing, and "samhsa_otp_cert" had a
+# pattern but no description at all, so it would have shipped a slice with a
+# blank legal basis.
+#
+# Patterns are Python regexes, matched case-insensitively against the decision
+# text after whitespace is collapsed and case citations are blanked out (see
+# METHODS.md). They are single-quoted so backslashes are literal.
+#
+# Adding a category means adding it here. Nothing else needs to change.
+
+categories:
+
+  # --- Program areas ---
+  # Subject-matter jurisdictions the Board hears. These match on the programme
+  # or statute by name rather than on a subsection number.
+
+  ori_research_misconduct:
+    description: 'Research misconduct findings (PHS/ORI) reviewed on appeal'
+    citation: '42 CFR Part 93'
+    pattern: 'office of research integrity|research misconduct|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*93'
+
+  clia_lab_sanctions:
+    description: 'CLIA laboratory certificate sanctions (revocation, suspension, CMP)'
+    citation: '42 CFR Part 493'
+    pattern: '\bCLIA\b|clinical laboratory improvement|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*493'
+
+  emtala_cmp:
+    description: 'EMTALA screening/stabilization civil money penalties'
+    citation: '42 U.S.C. 1395dd (EMTALA)'
+    pattern: '\bEMTALA\b|emergency medical treatment and (?:active )?labor act|1395dd'
+
+  opo_decert:
+    description: 'Organ procurement organization decertification/recertification'
+    citation: '42 CFR Part 486'
+    pattern: 'organ procurement organization|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*486'
+
+  samhsa_otp_cert:
+    description: 'Opioid treatment program certification (SAMHSA)'
+    citation: '42 CFR Part 8'
+    pattern: 'opioid treatment program|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*8\b'
+
+  ihs_isdeaa:
+    description: 'Indian Self-Determination and Education Assistance Act contract/funding disputes'
+    citation: '25 U.S.C. 5301 et seq. (ISDEAA)'
+    pattern: 'indian self-determination|ISDEAA|self-determination (?:and education )?assistance act|\b638 contract'
+
+  head_start:
+    description: 'Head Start grant disputes (termination, denial of refunding, and related actions)'
+    citation: 'Head Start Act; 45 CFR Part 1303'
+    pattern: 'head start'
+
+  title_ivd_child_support:
+    description: 'Title IV-D child support enforcement penalty/audit disallowances'
+    citation: 'Title IV-D, Social Security Act'
+    pattern: 'title iv-d|child support enforcement'
+
+  # --- OIG exclusion sub-bases, section 1128(b) ---
+  # Permissive exclusions. The subsection is the whole distinction between these,
+  # so the patterns must not bleed into each other: (b)(4) must not match
+  # (b)(14). The 1320a-7 alternative is the U.S. Code rendering of the same
+  # provision, and the separator class is loose because PDF extraction breaks
+  # '1320a-7' across a line as '1320a- 7'.
+
+  excl_b3_controlled_substance:
+    description: 'OIG exclusion for controlled substance conviction'
+    citation: '42 U.S.C. 1320a-7(b)(3) / 1128(b)(3)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*3\s*\)'
+
+  excl_b4_license_revocation:
+    description: 'OIG exclusion for license revocation or surrender'
+    citation: '42 U.S.C. 1320a-7(b)(4) / 1128(b)(4)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*4\s*\)'
+
+  excl_b6_quality_care:
+    description: 'OIG exclusion for failure to provide quality care'
+    citation: '42 U.S.C. 1320a-7(b)(6) / 1128(b)(6)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*6\s*\)'
+
+  excl_b7_fraud_kickback:
+    description: 'OIG permissive exclusion for fraud, kickback, or related offenses'
+    citation: '42 U.S.C. 1320a-7(b)(7) / 1128(b)(7)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*7\s*\)'
+
+  excl_b14_loan_default:
+    description: 'OIG exclusion for default on health education loan/scholarship obligation'
+    citation: '42 U.S.C. 1320a-7(b)(14) / 1128(b)(14)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*14\s*\)'
+
+  # --- Enrollment revocation grounds, 42 CFR 424.535(a) ---
+  # CMS revocations of Medicare billing privileges. Same caution as above: the
+  # ground is the subsection.
+
+  enroll_a3_felony:
+    description: 'Provider enrollment revocation for felony conviction'
+    citation: '42 CFR 424.535(a)(3)'
+    pattern: '424\.535\s*\(\s*a\s*\)\s*\(\s*3\s*\)'
+
+  enroll_a5_nonoperational:
+    description: 'Provider enrollment revocation, non-operational provider/supplier'
+    citation: '42 CFR 424.535(a)(5)'
+    pattern: '424\.535\s*\(\s*a\s*\)\s*\(\s*5\s*\)'
+
+  enroll_a8_billing_abuse:
+    description: 'Provider enrollment revocation for abuse of billing privileges'
+    citation: '42 CFR 424.535(a)(8)'
+    pattern: '424\.535\s*\(\s*a\s*\)\s*\(\s*8\s*\)'
+
+  # --- OIG mandatory exclusions, section 1128(a) ---------------------------
+  # The four convictions that require exclusion, as against the discretionary
+  # (b) bases above. A conspicuous gap in the original sixteen, which had the
+  # permissive family and none of the mandatory one.
+
+  excl_a1_program_crime:
+    description: 'OIG mandatory exclusion for conviction of a program-related crime'
+    citation: '42 U.S.C. 1320a-7(a)(1) / 1128(a)(1)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*a\s*\)\s*\(\s*1\s*\)'
+
+  excl_a2_patient_abuse:
+    description: 'OIG mandatory exclusion for conviction relating to patient abuse or neglect'
+    citation: '42 U.S.C. 1320a-7(a)(2) / 1128(a)(2)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*a\s*\)\s*\(\s*2\s*\)'
+
+  excl_a3_felony_health_fraud:
+    description: 'OIG mandatory exclusion for felony health care fraud conviction'
+    citation: '42 U.S.C. 1320a-7(a)(3) / 1128(a)(3)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*a\s*\)\s*\(\s*3\s*\)'
+
+  excl_a4_controlled_substance_felony:
+    description: 'OIG mandatory exclusion for felony controlled substance conviction'
+    citation: '42 U.S.C. 1320a-7(a)(4) / 1128(a)(4)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*a\s*\)\s*\(\s*4\s*\)'
+
+  # --- remaining permissive exclusion bases, section 1128(b) ---------------
+
+  excl_b1_misdemeanor:
+    description: 'OIG exclusion for misdemeanor conviction relating to health care fraud'
+    citation: '42 U.S.C. 1320a-7(b)(1) / 1128(b)(1)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*1\s*\)'
+
+  excl_b5_federal_state_exclusion:
+    description: 'OIG exclusion following exclusion or suspension by a federal or state health care programme'
+    citation: '42 U.S.C. 1320a-7(b)(5) / 1128(b)(5)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*5\s*\)'
+
+  excl_b8_ownership_control:
+    description: 'OIG exclusion of an entity owned or controlled by a sanctioned individual'
+    citation: '42 U.S.C. 1320a-7(b)(8) / 1128(b)(8)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*8\s*\)'
+
+  excl_b15_owner_of_sanctioned_entity:
+    description: 'OIG exclusion of an individual who owns or controls a sanctioned entity'
+    citation: '42 U.S.C. 1320a-7(b)(15) / 1128(b)(15)'
+    pattern: '(?:1320a[\s\-‐-―]*7|1128)\s*\(\s*b\s*\)\s*\(\s*15\s*\)'
+
+  # --- other enforcement authorities ---------------------------------------
+
+  cmp_1128a:
+    description: 'Civil money penalties under section 1128A (false or fraudulent claims)'
+    citation: '42 U.S.C. 1320a-7a / 1128A; 42 CFR Part 1003'
+    pattern: '\b1128A\b|1320a-7a|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*1003'
+
+  peer_review_1156:
+    description: 'Sanctions for failure to meet professional obligations (peer review)'
+    citation: '42 U.S.C. 1320c-5 / section 1156'
+    pattern: 'section\s*1156\b|1320c-5'
+
+  tobacco_products:
+    description: 'FDA Center for Tobacco Products enforcement (no-tobacco-sale orders, CMPs)'
+    citation: '21 U.S.C. 333(f); 21 CFR Part 17'
+    pattern: 'center for tobacco products|\bCTP\b|21\s*U\.?S\.?C\.?\s*333'
+
+  # --- provider and supplier enforcement -----------------------------------
+
+  immediate_jeopardy:
+    description: 'Findings of immediate jeopardy to resident or patient health and safety'
+    citation: '42 CFR 488.301'
+    pattern: 'immediate jeopardy'
+
+  life_safety_code:
+    description: 'Life Safety Code deficiencies'
+    citation: '42 CFR 483.90; NFPA 101'
+    pattern: 'life safety code'
+
+  infection_control:
+    description: 'Infection prevention and control deficiencies'
+    citation: '42 CFR 483.80'
+    pattern: 'infection control|infection prevention and control|483\.80'
+
+  emergency_preparedness:
+    description: 'Emergency preparedness requirements for participating providers'
+    citation: '42 CFR 483.73'
+    pattern: 'emergency preparedness|483\.73'
+
+  provider_agreement_498:
+    description: 'Provider and supplier appeal rights and procedures'
+    citation: '42 CFR Part 498'
+    pattern: '42\s*C\.?\s*F\.?\s*R\.?\s*part\s*498'
+
+  dmepos_supplier_standards:
+    description: 'DMEPOS supplier standards'
+    citation: '42 CFR 424.57'
+    pattern: '424\.57(?!\d)'
+
+  hospice:
+    description: 'Hospice certification, conditions of participation and payment disputes'
+    citation: '42 CFR Part 418'
+    pattern: '\bhospice\b'
+
+  # --- Medicare parts C and D ----------------------------------------------
+
+  medicare_advantage:
+    description: 'Medicare Advantage (Part C) organisation disputes'
+    citation: '42 CFR Part 422'
+    pattern: 'medicare advantage|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*422'
+
+  part_d_prescription:
+    description: 'Medicare Part D prescription drug plan disputes'
+    citation: '42 CFR Part 423'
+    pattern: 'prescription drug plan|42\s*C\.?\s*F\.?\s*R\.?\s*part\s*423'
+
+  # --- other grant programmes ----------------------------------------------
+
+  iv_e_foster_care:
+    description: 'Title IV-E foster care and adoption assistance disallowances'
+    citation: 'Title IV-E, Social Security Act; 45 CFR Part 1356'
+    pattern: 'title iv-e|foster care maintenance'
+
+  tanf:
+    description: 'Temporary Assistance for Needy Families penalties and disallowances'
+    citation: 'Title IV-A, Social Security Act; 45 CFR Part 262'
+    pattern: '\bTANF\b|temporary assistance for needy families'

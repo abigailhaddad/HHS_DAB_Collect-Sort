@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""Convert a folder of DAB/ALJ decisions into one JSONL per corpus.
+
+    python extract.py ./dab_pdfs -o dab.jsonl
+    python extract.py ./dab_pdfs -o dab.jsonl --ocr   # needs tesseract
+
+Both file types are read, because HHS publishes both: decisions to about 1999
+are HTML, later ones are PDF, and from 2017 each decision is a web page again.
+A PDF-only extractor silently skips two thirds of the collection window.
+
+One JSON object per line, one line per decision. Categorisation is not done
+here -- that is build_slices.py's job, driven by categories.yaml. Emitting a (b)(7)
+slice from inside the extractor meant one category was privileged over the
+fifteen others and its label was computed by different code than theirs.
+"""
+from __future__ import annotations
+
+import argparse
+import html as html_mod
+import json
+import re
+import sys
+from pathlib import Path
+
+from pypdf import PdfReader
+
+import clean
+
+HTML_SUFFIXES = {".html", ".htm"}
+PDF_SUFFIXES = {".pdf"}
+
+# A decision page is dense prose. Across the 8,246 decisions in the corpus the
+# median page holds 2,163 characters and the 1st percentile holds 978, so a page
+# under this is a scanning artefact -- and unlike an absolute character count, it
+# still catches a long document whose text layer produced nothing.
+MIN_CHARS_PER_PAGE = 400
+
+
+def extract_pdf(pdf_path: Path) -> tuple[str, int]:
+    reader = PdfReader(str(pdf_path))
+    pages = [(p.extract_text() or "") for p in reader.pages]
+    return "\n".join(pages), len(reader.pages)
+
+
+# Whole elements whose text is never part of a decision.
+_DROP_ELEMENTS = re.compile(
+    r"<(script|style|nav|header|footer|aside|form|noscript)\b.*?</\1\s*>",
+    re.S | re.I)
+# The decision itself. From 2017 HHS renders it inside <article>, with the case
+# caption in the page title above it.
+_ARTICLE = re.compile(r"<article\b[^>]*>(.*)</article\s*>", re.S | re.I)
+_MAIN = re.compile(r"<main\b[^>]*>(.*)</main\s*>", re.S | re.I)
+_PAGE_TITLE = re.compile(r'<h1[^>]*class="[^"]*page-title[^"]*"[^>]*>(.*?)</h1>',
+                         re.S | re.I)
+# Block-level boundaries become whitespace; everything else is removed with no
+# separator at all. Replacing every tag with a space splits text that inline
+# markup runs through: the 1999-2006 decisions render the number as
+# "Decision No. <strong>CR7</strong><b>38</b>", which came out "CR7 38" and
+# parsed as decision CR7 -- eleven different decisions collapsed onto it.
+_BLOCK = ("address|article|aside|blockquote|br|caption|col|colgroup|dd|div|dl|dt|"
+          "fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|legend|li|main|"
+          "nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul")
+_BLOCK_TAG = re.compile(rf"</?(?:{_BLOCK})\b[^>]*>", re.I)
+_ANY_TAG = re.compile(r"<[^>]+>")
+
+
+# A content region has to actually contain a decision. Taking <article>
+# unconditionally means a page where that element exists but holds something
+# else -- a promo card, an empty shell -- silently yields a few hundred
+# characters instead of the decision, and nothing downstream can tell that from
+# a genuinely short order. Borrowed from the selector cascade in utah's
+# extract_section_text, which requires a candidate to clear a length floor
+# before it wins.
+MIN_REGION_CHARS = 500
+
+
+def _content_region(body: str) -> str:
+    """First region that yields enough text wins; else the whole document.
+
+    Greedy to the LAST closing tag: a non-greedy match stops at the first
+    nested </article> and truncates the decision.
+    """
+    for rx in (_ARTICLE, _MAIN):
+        m = rx.search(body)
+        if not m:
+            continue
+        candidate = m.group(1)
+        if len(_ANY_TAG.sub("", candidate).strip()) >= MIN_REGION_CHARS:
+            return candidate
+    return body
+
+
+def extract_html(path: Path) -> tuple[str, int]:
+    """Text from an HTML decision. Page count is unknown, so it is 0.
+
+    The content region is selected from the markup rather than the navigation
+    being matched out of the text afterwards. On the 2017-on template the page
+    is 207 KB of which the decision is 22 KB; tag-stripping the whole document
+    leaves the breadcrumb, the mega-menu, the newsroom promos and the footer
+    sitting in the text as ordinary prose, where nothing downstream can tell
+    them from the decision -- clean.py cannot help, because its breadcrumb
+    pattern keys on the "</about/agencies>" link markup that tag-stripping has
+    already removed.
+
+    Older templates have no <article> or <main>; those fall through to the whole
+    document, which is what they were always parsed as.
+    """
+    raw = path.read_bytes().decode("utf-8", "replace")
+    body = _DROP_ELEMENTS.sub(" ", raw)
+
+    title = ""
+    m = _PAGE_TITLE.search(body)
+    if m:
+        title = m.group(1)
+    body = _content_region(body)
+
+    body = _BLOCK_TAG.sub("\n", title + "\n" + body)
+    body = _ANY_TAG.sub("", body)
+    return html_mod.unescape(body), 0
+
+
+def extract_text(path: Path) -> tuple[str, int]:
+    if path.suffix.lower() in HTML_SUFFIXES:
+        return extract_html(path)
+    return extract_pdf(path)
+
+
+def ocr_text(pdf_path: Path, dpi: int = 300) -> str:
+    """Rasterize each page and OCR it. Imports are local so the tool runs
+    without the OCR stack unless --ocr is actually used."""
+    import io
+
+    import pymupdf              # rasterizer (no system poppler needed)
+    import pytesseract          # wraps the tesseract binary
+    from PIL import Image
+
+    out = []
+    with pymupdf.open(str(pdf_path)) as doc:
+        for page in doc:
+            pix = page.get_pixmap(dpi=dpi)
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            out.append(pytesseract.image_to_string(img))
+    return "\n".join(out)
+
+
+def no_vowel_rate(text: str) -> float:
+    """Share of words with no vowel. Reported, never used as a gate.
+
+    It looks like a garbling detector and is not one. Across the corpus it runs
+    1.5% at the median and 4.5% at the 95th percentile, and the three highest
+    scores -- 8% -- belong to In re LCD Complaint decisions, which are dense with
+    CPT codes and medical abbreviations and perfectly well extracted. Any
+    threshold low enough to catch a garbled scan throws those out with it.
+    """
+    words = re.findall(r"[A-Za-z]{3,}", text)
+    if not words:
+        return 1.0
+    return sum(1 for w in words if not re.search(r"[aeiouyAEIOUY]", w)) / len(words)
+
+
+def text_quality(text: str, n_pages: int) -> tuple[bool, str]:
+    """Is this text layer usable? Returns (ok, reason-if-not).
+
+    An absolute character floor only catches PDFs with *no* text layer. It does
+    not catch the 1980s scans in this corpus, whose layers are present, long,
+    and garbled -- those cleared a 200-character threshold and were never
+    re-OCR'd, so they shipped as-is.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return False, "empty text layer"
+    if n_pages and len(stripped) / n_pages < MIN_CHARS_PER_PAGE:
+        return False, f"{len(stripped) // max(n_pages, 1)} chars/page"
+    return True, ""
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="decision PDFs -> corpus JSONL")
+    ap.add_argument("input_dir", type=Path, help="folder to search (recursive)")
+    ap.add_argument("-o", "--out", type=Path, default=Path("dab.jsonl"))
+    ap.add_argument("--glob", default="**/*", help="pattern under input_dir")
+    ap.add_argument("--ocr", action="store_true",
+                    help="re-OCR any PDF whose text layer fails the quality test")
+    ap.add_argument("--ocr-dpi", type=int, default=300)
+    args = ap.parse_args()
+
+    wanted = HTML_SUFFIXES | PDF_SUFFIXES
+    pdfs = sorted(p for p in args.input_dir.glob(args.glob)
+                  if p.is_file() and p.suffix.lower() in wanted)
+    if not pdfs:
+        print(f"No decisions under {args.input_dir} matching {args.glob}",
+              file=sys.stderr)
+        return 1
+
+    total = failed = ocr_used = poor = 0
+    with args.out.open("w", encoding="utf-8") as fout:
+        for pdf in pdfs:
+            try:
+                text, n_pages = extract_text(pdf)
+            except Exception as e:                  # keep going; log the casualty
+                failed += 1
+                print(f"[skip] {pdf}: {e}", file=sys.stderr)
+                continue
+
+            # An HTML decision has no page count, so the per-page floor cannot
+            # apply; it is judged on having any text at all.
+            ok, reason = text_quality(text, n_pages)
+            did_ocr = False
+            if not ok:
+                poor += 1
+                if args.ocr:
+                    try:
+                        ocr = ocr_text(pdf, dpi=args.ocr_dpi)
+                        # Only take the OCR if it is actually better.
+                        if text_quality(ocr, n_pages)[0] or len(ocr.strip()) > len(text.strip()):
+                            text, did_ocr = ocr, True
+                            ocr_used += 1
+                    except Exception as e:
+                        print(f"[ocr-fail] {pdf}: {e}", file=sys.stderr)
+                else:
+                    print(f"[poor text] {pdf}: {reason}", file=sys.stderr)
+
+            # The id is the path under input_dir; the absolute path is not
+            # recorded, because it is the operator's local directory layout and
+            # means nothing to anyone downloading the dataset.
+            fout.write(json.dumps({
+                "id": pdf.relative_to(args.input_dir).with_suffix("").as_posix(),
+                "text": text,
+                "num_pages": n_pages,
+                "num_chars": len(text),
+                "ocr_used": did_ocr,
+                "text_layer_ok": ok or did_ocr,
+            }, ensure_ascii=False) + "\n")
+            total += 1
+
+    print(f"Wrote {total} records to {args.out}", file=sys.stderr)
+    print(f"  {poor} had a poor text layer" + (f", {ocr_used} recovered by OCR"
+          if args.ocr else " (re-run with --ocr to recover them)"), file=sys.stderr)
+    if failed:
+        print(f"  {failed} failed extraction (logged above)", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
