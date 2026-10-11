@@ -44,6 +44,30 @@ DATE_LABELLED_RE = re.compile(
 # Is there a DATE label at all? If there is and it will not parse, the answer is
 # "unknown", not "some other date from the page".
 DATE_LABEL_PRESENT = re.compile(r"\bdate\s*[:~.]", re.IGNORECASE)
+# DATE_LABEL_PRESENT is loose on purpose, and too loose: "received on that
+# date." ends a sentence with "date" and a period, and that alone turned off the
+# unlabelled-date fallback for ~300 decisions. A real header label starts its
+# line.
+DATE_LABEL_LINE = re.compile(r"(?im)^[ \t]*date[ \t]*[:~.]")
+# "Date: 1999 October 12" -- year first, the 1999 CR format. The month-first
+# pattern above cannot read it, so ~60 decisions came back undated.
+DATE_LABELLED_YEAR_FIRST_RE = re.compile(
+    r"date\s*[:~.]?\s*(\d{4})\s+([A-Za-z~][A-Za-z.~]{1,9})\.?\s+(\d{1,2})\b",
+    re.IGNORECASE)
+# How far a fallback date may sit from the date the Board's own listing gives
+# in the record id ("2019.07.02 CR5361 ...") before it is not trusted.
+CAPTION_AGREEMENT_DAYS = 3
+_CAPTION_DATE_RE = re.compile(r"^\s*(\d{4})[.\-](\d{2})[.\-](\d{2})")
+
+
+def _caption_date(record_id: str) -> date | None:
+    m = _CAPTION_DATE_RE.match(record_id or "")
+    if not m:
+        return None
+    try:
+        return date(int(m[1]), int(m[2]), int(m[3]))
+    except ValueError:
+        return None
 
 # "Decision No. 2024", "Decision No. CR1723", "DAB No. 3117", "DAB CR6187"
 #
@@ -171,6 +195,7 @@ FILENAME_RULING = re.compile(
 # audit_completeness.py could never tell one was missing: 285 of them, none in
 # the corpus, none of them counted as a gap because a decision with no number
 # does not show up as a decision that failed to match one.
+RULING_TYPED_AS_DAB = re.compile(r"DAB\s*((?:19|20)\d\d-\d{1,3})\b", re.IGNORECASE)
 FILENAME_NO = re.compile(
     r"(DAB|CR|TB|Decision\s+No\.?|No\.)[\s;,._-]*0*(\d{1,5}R?)\b", re.IGNORECASE)
 
@@ -195,6 +220,13 @@ def decision_no_from_text(fragment: str) -> str | None:
     if not fragment:
         return None
     m = FILENAME_RULING.search(fragment)
+    if m:
+        return "RULING" + m.group(1)
+    # The Board once typed a ruling's number as "DAB2026-19" (its URL says
+    # board-ruling-2026-19). A DAB decision number has no "-NN" suffix, so this
+    # shape is a ruling; read as a decision it came back as number 2026, which
+    # also names a real 2006 decision.
+    m = RULING_TYPED_AS_DAB.search(fragment)
     if m:
         return "RULING" + m.group(1)
     m = FILENAME_NO.search(fragment)
@@ -227,7 +259,10 @@ def parse(text: str, record_id: str = "") -> dict:
     # Cleaning is the caller's job (build_dataset does it once per record);
     # running it again here doubled the work on every decision. Text that has
     # not been cleaned still parses -- the header sits above the furniture.
-    head = text[:4000]                   # the header always sits in the first pages
+    # Some extractions put a NUL between every character ("\x00D\x00e\x00p..."),
+    # which no pattern below can read; ~180 older decisions came back undated.
+    had_nul = "\x00" in text[:4000]
+    head = text[:4000].replace("\x00", "")  # the header always sits in the first pages
 
     decision_no = None
     for rx in (DECISION_RE, DAB_NO_RE):
@@ -258,11 +293,32 @@ def parse(text: str, record_id: str = "") -> dict:
         decision_date = _to_date(*m.groups())
         if decision_date:
             break
-    if decision_date is None and not DATE_LABEL_PRESENT.search(head):
-        for m in DATE_RE.finditer(head):
-            decision_date = _to_date(*m.groups())
+    if decision_date is None:
+        for m in DATE_LABELLED_YEAR_FIRST_RE.finditer(head):
+            decision_date = _to_date(m.group(2), m.group(3), m.group(1))
             if decision_date:
                 break
+    if decision_date is None and not DATE_LABEL_LINE.search(head):
+        # No header label. Where the loose test also saw none (and the text
+        # needed no NUL-stripping) this is the original fallback, unchanged.
+        # Where only the loose test saw one (a sentence ending "date."), the
+        # fallback is allowed back in but only trusted if it agrees with the
+        # date in the record id: the header is full of dates from the facts,
+        # and "null rather than wrong" still holds.
+        # Text that only parses once its NULs are stripped is also newly
+        # readable, and its unlabelled dates get the same guard.
+        loose = bool(DATE_LABEL_PRESENT.search(head)) or had_nul
+        listed = _caption_date(record_id)
+        for m in DATE_RE.finditer(head):
+            candidate = _to_date(*m.groups())
+            if not candidate:
+                continue
+            if loose and not (listed and abs(
+                    (date.fromisoformat(candidate) - listed).days)
+                    <= CAPTION_AGREEMENT_DAYS):
+                break
+            decision_date = candidate
+            break
 
     tribunal = next((name for name, rx in TRIBUNALS if rx.search(head)), None)
     respondent = next((name for name, rx in RESPONDENTS if rx.search(head)), None)

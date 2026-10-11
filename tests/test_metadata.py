@@ -156,3 +156,62 @@ def test_docket_number_spelled_out():
     m = metadata.parse("DECISION OF MEDICARE APPEALS COUNCIL\n"
                        "Docket Number: M-10-1171\nIn the case of Montefiore\n")
     assert m["docket_nos"] == ["M-10-1171"]
+
+
+# --- undated decisions: three causes, and the guard that keeps "null rather than wrong" ---
+
+def test_year_first_date_label_parses():
+    # The 1999 CR format: "Date: 1999 October 12". Month-first patterns missed it.
+    text = ("DEPARTMENTAL APPEALS BOARD\nCivil Remedies Division\nDate: 1999 "
+            "October 12\nDocket No. C-98-438\nDecision No. CR621\n")
+    assert metadata.parse(text, "1999_CR621")["decision_date"] == "1999-10-12"
+
+
+def test_nul_between_every_character_is_read_through():
+    # Some extractions yield "\x00D\x00a\x00t\x00e..." and no pattern matched.
+    plain = "DEPARTMENTAL APPEALS BOARD\nDATE: June 1, 1993\nDecision No. 1415\n"
+    spaced = "\x00".join(plain)
+    assert metadata.parse(spaced, "1993.06.01DAB1415 X")["decision_date"] == "1993-06-01"
+
+
+def test_a_sentence_ending_in_date_no_longer_blocks_the_fallback():
+    # "received on that date." has "date" and a period, which used to be taken
+    # for a DATE: label and switch the fallback off. With a record-id date that
+    # agrees, the bare header date is trusted again.
+    text = ("DEPARTMENTAL APPEALS BOARD\nCivil Remedies Division\nJuly 2, 2019\n"
+            "Docket No. C-19-1\nThe request was received on that date.\n"
+            "Decision No. CR5361\n")
+    assert metadata.parse(text, "2019.07.02 CR5361 Wesley J. Nord")["decision_date"] == "2019-07-02"
+
+
+def test_that_fallback_is_refused_when_it_disagrees_with_the_record_id():
+    # Same shape, but the only date in the header is from the facts. Without an
+    # agreeing record-id date it stays null -- null rather than wrong.
+    text = ("DEPARTMENTAL APPEALS BOARD\nPeriod audited: March 3, 2007\n"
+            "The request was received on that date.\nDecision No. CR1762\n")
+    assert metadata.parse(text, "2008.03.20 CR1762 Feole")["decision_date"] is None
+    assert metadata.parse(text, "CR1762")["decision_date"] is None   # no id date at all
+
+
+def test_nul_text_gets_the_same_guard_on_its_unlabelled_dates():
+    plain = ("DEPARTMENTAL APPEALS BOARD\nStatement of facts: October 1, 1986\n"
+             "Decision No. 1539\n")
+    spaced = "\x00".join(plain)
+    assert metadata.parse(spaced, "1995.10.06DAB1539 California")["decision_date"] is None
+
+
+def test_the_original_fallback_is_unchanged_when_there_is_no_label_at_all():
+    # No "date" anywhere: behaves exactly as before, id date or not.
+    text = "DEPARTMENTAL APPEALS BOARD\nJune 30, 2015\nDecision No. 2647\n"
+    assert metadata.parse(text, "2015.06.30 DAB2647 X")["decision_date"] == "2015-06-30"
+    assert metadata.parse(text, "DAB2647")["decision_date"] == "2015-06-30"
+
+
+def test_a_ruling_the_board_typed_as_dab_is_a_ruling():
+    # "2026.08.13; DAB2026-19, ..." (URL: board-ruling-2026-19) came back as
+    # decision 2026, which also names a real 2006 decision.
+    assert metadata.decision_no_from_text("2026.08.13; DAB2026-19, O D Inc.") == "RULING2026-19"
+    assert metadata.decision_no_from_text("2026.08.10; RUL2026-18; Mega Hospice") == "RULING2026-18"
+    # ...and real four-digit DAB numbers are untouched.
+    assert metadata.decision_no_from_text("2003.12.04 DAB1900 Franklin Care") == "1900"
+    assert metadata.decision_no_from_text("2026.09.22 DAB3241 X") == "3241"
