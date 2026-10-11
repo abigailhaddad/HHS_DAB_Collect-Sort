@@ -41,8 +41,11 @@ jobs:
         # The Archive walk is bounded (60 min; the 10/9 run needed >35 and was still moving) so a slow Archive fails this step
         # with a message, with the live top-up done and the index uploaded as an
         # artifact, instead of the whole job being cancelled at its timeout.
+        # index_cache.jsonl is the last good index (committed below): a
+        # division-year the Archive cannot serve today comes from it, listed as
+        # "from_cache" in the step summary, instead of failing the run.
         timeout-minutes: 75
-        run: xvfb-run -a python collect_index.py --out decisions_index.jsonl --launch-browser --archive-budget-minutes 60
+        run: xvfb-run -a python collect_index.py --out decisions_index.jsonl --launch-browser --archive-budget-minutes 60 --cache index_cache.jsonl
 
       - name: Fail if any division-year lost decisions
         run: python check_index.py decisions_index.jsonl --baseline index_baseline.json
@@ -61,10 +64,10 @@ jobs:
         run: |
           python check_index.py decisions_index.jsonl \
             --baseline index_baseline.json --update
-          if ! git diff --quiet index_baseline.json; then
+          if ! git diff --quiet index_baseline.json index_cache.jsonl; then
             git config user.name  "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add index_baseline.json
+            git add index_baseline.json index_cache.jsonl
             git commit -m "Baseline: newly published decisions [skip ci]"
             git push
           else

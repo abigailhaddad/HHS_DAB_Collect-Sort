@@ -12,3 +12,6 @@ __pycache__/
 !.dev.vars.example
 .env*
 !.env.example
+
+# The last good index: committed on purpose (see collect_index.py --cache).
+!index_cache.jsonl
