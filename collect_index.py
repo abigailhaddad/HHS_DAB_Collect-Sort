@@ -153,6 +153,13 @@ def main() -> int:
                     help="same live top-up as --cdp, but launches its own "
                          "throwaway headless=False Chrome instead of "
                          "attaching to one you started -- for CI, under Xvfb")
+    ap.add_argument("--archive-budget-minutes", type=float, default=None,
+                    help="stop walking the Archive after this long: the "
+                         "division-years not reached are recorded as "
+                         "unfetched, the live top-up still runs, and the "
+                         "exit status is 1. A degraded Archive otherwise "
+                         "burns the whole job timeout, so the run is "
+                         "cancelled with no index written and no message")
     ap.add_argument("--live-years", type=int, default=1,
                     help="how many years back from --to-year to top up "
                          "live when --cdp or --launch-browser is set")
@@ -164,9 +171,21 @@ def main() -> int:
 
     by_key: dict[str, list[dict]] = {}
     unfetched = []
+    deadline = (time.monotonic() + args.archive_budget_minutes * 60
+                if args.archive_budget_minutes else None)
+    out_of_time = False
     for division in DIVISIONS:
         start = args.from_year or FIRST_YEAR[division]
         for year in range(start, args.to_year + 1):
+            if deadline is not None and time.monotonic() > deadline:
+                if not out_of_time:
+                    print(f"ARCHIVE BUDGET OF {args.archive_budget_minutes:g} "
+                          f"MIN EXHAUSTED at {division} {year}; the Archive "
+                          f"is too slow today. Remaining division-years are "
+                          f"recorded as unfetched.", flush=True)
+                out_of_time = True
+                unfetched.append(f"{division}:{year}")
+                continue
             page_url = f"{BASE}/{DIVISIONS[division]}/{year}/index.html"
             expected = baseline.get(f"{division}:{year}", 0)
             found = None
@@ -258,6 +277,10 @@ def main() -> int:
     if unfetched:
         print(f"{len(unfetched)} division-year(s) could not be fetched and are "
               f"recorded in {meta.name}: {', '.join(unfetched)}")
+    if out_of_time:
+        print("exiting 1: the index is incomplete because the Archive budget "
+              "ran out (see above)")
+        return 1
     return 0
 
 
