@@ -160,6 +160,12 @@ def main() -> int:
                          "exit status is 1. A degraded Archive otherwise "
                          "burns the whole job timeout, so the run is "
                          "cancelled with no index written and no message")
+    ap.add_argument("--cache", type=Path, default=None,
+                    help="a committed copy of the last good index. A "
+                         "division-year the Archive cannot serve this run "
+                         "(failed, or past the budget) falls back to its "
+                         "cached rows, and is reported as from_cache -- never "
+                         "silently. Fresh years are folded back into it.")
     ap.add_argument("--live-years", type=int, default=1,
                     help="how many years back from --to-year to top up "
                          "live when --cdp or --launch-browser is set")
@@ -169,22 +175,44 @@ def main() -> int:
     if args.baseline.exists():
         baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
 
+    cache: dict[str, list[dict]] = {}
+    if args.cache and args.cache.exists():
+        for r in jsonl.read(args.cache):
+            cache.setdefault(f"{r['division']}:{r['year']}", []).append(r)
+
     by_key: dict[str, list[dict]] = {}
     unfetched = []
+    from_cache: list[str] = []
     deadline = (time.monotonic() + args.archive_budget_minutes * 60
                 if args.archive_budget_minutes else None)
     out_of_time = False
+
+    def fall_back(key: str) -> None:
+        """The Archive could not serve this division-year: use the last good
+        copy if there is one, and say so. Without one it is unfetched."""
+        if cache.get(key):
+            by_key[key] = list(cache[key])
+            from_cache.append(key)
+            print(f"{key.replace(':', ' ')}: {len(cache[key])} FROM CACHE "
+                  f"(the Archive could not serve it today)", flush=True)
+        else:
+            unfetched.append(key)
+
     for division in DIVISIONS:
         start = args.from_year or FIRST_YEAR[division]
-        for year in range(start, args.to_year + 1):
+        # Newest first, so that if the budget runs out it is the old years --
+        # which almost never change, and which the cache holds -- that are
+        # skipped, not the recent ones.
+        for year in range(args.to_year, start - 1, -1):
             if deadline is not None and time.monotonic() > deadline:
                 if not out_of_time:
                     print(f"ARCHIVE BUDGET OF {args.archive_budget_minutes:g} "
                           f"MIN EXHAUSTED at {division} {year}; the Archive "
-                          f"is too slow today. Remaining division-years are "
-                          f"recorded as unfetched.", flush=True)
+                          f"is too slow today. Remaining division-years come "
+                          f"from the cache, or are recorded as unfetched.",
+                          flush=True)
                 out_of_time = True
-                unfetched.append(f"{division}:{year}")
+                fall_back(f"{division}:{year}")
                 continue
             page_url = f"{BASE}/{DIVISIONS[division]}/{year}/index.html"
             expected = baseline.get(f"{division}:{year}", 0)
@@ -213,8 +241,8 @@ def main() -> int:
                         break
                 time.sleep(args.delay)
             if not found:
-                unfetched.append(f"{division}:{year}")
                 print(f"{division} {year}: NOT COLLECTED", flush=True)
+                fall_back(f"{division}:{year}")
                 continue
             by_key[f"{division}:{year}"] = found
             print(f"{division} {year}: {len(found)}", flush=True)
@@ -255,6 +283,8 @@ def main() -> int:
                         merged_list = list(merged.values())
                         if key in unfetched and merged_list:
                             unfetched.remove(key)
+                        if key in from_cache and live:
+                            from_cache.remove(key)    # fresh, not stale
                         gain = len(merged_list) - len(by_key.get(key, []))
                         by_key[key] = merged_list
                         print(f"{division} {year}: {len(merged_list)} live "
@@ -262,7 +292,23 @@ def main() -> int:
             finally:
                 browser_page.close()
 
-    rows = [r for found in by_key.values() for r in found]
+    div_order = {d: i for i, d in enumerate(DIVISIONS)}
+    ordered = sorted(by_key, key=lambda k: (div_order[k.split(":")[0]],
+                                            int(k.split(":")[1])))
+    rows = [r for key in ordered for r in by_key[key]]
+
+    if args.cache:
+        # Fold this run's FRESH years back into the cache, by URL and never
+        # dropping a cached row, so it only ever grows. Years that came from
+        # the cache are not "fresh" and are left exactly as they were.
+        merged_cache = {r["url"]: r for rs in cache.values() for r in rs}
+        for key in ordered:
+            if key not in from_cache:
+                merged_cache.update({r["url"]: r for r in by_key[key]})
+        cache_rows = sorted(merged_cache.values(),
+                            key=lambda r: (div_order[r["division"]],
+                                           r["year"], r["url"]))
+        jsonl.write(args.cache, cache_rows)
 
     jsonl.write(args.out, rows)
     # A sidecar, so that a year nobody could fetch is distinguishable downstream
@@ -270,6 +316,7 @@ def main() -> int:
     # failed fetch as decisions having been lost.
     meta = args.out.with_suffix(".meta.json")
     meta.write_text(json.dumps({"unfetched": sorted(unfetched),
+                                "from_cache": sorted(from_cache),
                                 "decisions": len(rows),
                                 "cdp": bool(args.cdp)}, indent=2) + "\n",
                     encoding="utf-8")
@@ -277,9 +324,19 @@ def main() -> int:
     if unfetched:
         print(f"{len(unfetched)} division-year(s) could not be fetched and are "
               f"recorded in {meta.name}: {', '.join(unfetched)}")
-    if out_of_time:
+    if from_cache:
+        msg = (f"{len(from_cache)} division-year(s) came from the cache, not "
+               f"the Archive, because it could not serve them today: "
+               f"{', '.join(sorted(from_cache))}")
+        print(msg)
+        import os
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as f:
+                f.write(f"\n**Index fallback:** {msg}\n")
+    if out_of_time and unfetched:
         print("exiting 1: the index is incomplete because the Archive budget "
-              "ran out (see above)")
+              "ran out and some division-years have no cached copy (see above)")
         return 1
     return 0
 

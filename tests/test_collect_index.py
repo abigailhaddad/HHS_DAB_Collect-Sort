@@ -154,3 +154,92 @@ def test_no_budget_keeps_the_old_exit_status(tmp_path, monkeypatch):
         "--from-year", "2020", "--to-year", "2020",
         "--baseline", str(tmp_path / "none.json")])
     assert ci.main() == 0
+
+
+def _argv(monkeypatch, tmp_path, *extra, from_year="2020", to_year="2022"):
+    import sys
+    monkeypatch.setattr(sys, "argv", [
+        "collect_index.py", "--out", str(tmp_path / "idx.jsonl"),
+        "--from-year", from_year, "--to-year", to_year,
+        "--baseline", str(tmp_path / "none.json"), *extra])
+
+
+def _cache_rows(division, year, n=2):
+    return [{"division": division, "year": year, "decision_no": str(i),
+             "caption": f"cached {i}",
+             "url": f"https://example.test/{division}/{year}/{i}.pdf"}
+            for i in range(n)]
+
+
+def test_an_unservable_year_falls_back_to_the_cache_and_says_so(tmp_path, monkeypatch):
+    import json
+    import jsonl
+
+    monkeypatch.setattr(ci.archive, "snapshot_url", lambda url: None)
+    monkeypatch.setattr(ci.time, "sleep", lambda s: None)
+    cache = tmp_path / "cache.jsonl"
+    jsonl.write(cache, _cache_rows("alj", 2021))
+    _argv(monkeypatch, tmp_path, "--cache", str(cache))
+    assert ci.main() == 0
+    meta = json.loads((tmp_path / "idx.meta.json").read_text())
+    assert meta["from_cache"] == ["alj:2021"]            # said, not silent
+    assert "alj:2021" not in meta["unfetched"]
+    assert len(meta["unfetched"]) == 5                   # the other 5 had no copy
+    rows = jsonl.read(tmp_path / "idx.jsonl")
+    assert [r["caption"] for r in rows] == ["cached 0", "cached 1"]
+
+
+def test_budget_exhaustion_is_survivable_only_if_the_cache_covers_it(tmp_path, monkeypatch):
+    import json
+    import jsonl
+
+    monkeypatch.setattr(ci.archive, "snapshot_url", lambda url: None)
+    monkeypatch.setattr(ci.time, "sleep", lambda s: None)
+    clock = iter(range(0, 100_000, 100))
+    monkeypatch.setattr(ci.time, "monotonic", lambda: next(clock))
+    cache = tmp_path / "cache.jsonl"
+    full = [r for d in ("alj", "dab") for y in (2020, 2021, 2022)
+            for r in _cache_rows(d, y)]
+    jsonl.write(cache, full)
+    _argv(monkeypatch, tmp_path, "--cache", str(cache),
+          "--archive-budget-minutes", "5")
+    assert ci.main() == 0                    # every skipped year had a copy
+    meta = json.loads((tmp_path / "idx.meta.json").read_text())
+    assert meta["unfetched"] == []
+    assert len(meta["from_cache"]) == 6      # ...and each one is listed
+
+    # one year with no cached copy: back to the loud failure
+    jsonl.write(cache, [r for r in full if not (r["division"] == "dab" and r["year"] == 2020)])
+    clock2 = iter(range(0, 100_000, 100))
+    monkeypatch.setattr(ci.time, "monotonic", lambda: next(clock2))
+    assert ci.main() == 1
+    meta = json.loads((tmp_path / "idx.meta.json").read_text())
+    assert meta["unfetched"] == ["dab:2020"]
+
+
+def test_the_walk_is_newest_first(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(ci.archive, "snapshot_url", lambda url: seen.append(url))
+    monkeypatch.setattr(ci.time, "sleep", lambda s: None)
+    _argv(monkeypatch, tmp_path)
+    ci.main()
+    years = [int(u.split("/")[-2]) for u in seen if "/alj-decisions/" in u]
+    assert years[:2] == [2022, 2022] and years[-2:] == [2020, 2020]
+
+
+def test_fresh_years_are_folded_into_the_cache_and_it_only_grows(tmp_path, monkeypatch, index_pages):
+    import jsonl
+
+    monkeypatch.setattr(ci.archive, "snapshot_url", lambda url: url)
+    monkeypatch.setattr(ci.archive, "get_text",
+                        lambda snap: index_pages["alj_2016"] if "/alj-decisions/2016/" in snap else None)
+    monkeypatch.setattr(ci.time, "sleep", lambda s: None)
+    cache = tmp_path / "cache.jsonl"
+    stale = _cache_rows("alj", 2016, 1) + _cache_rows("dab", 2016, 1)
+    jsonl.write(cache, stale)
+    _argv(monkeypatch, tmp_path, "--cache", str(cache), from_year="2016", to_year="2016")
+    ci.main()
+    urls = {r["url"] for r in jsonl.read(cache)}
+    assert "https://example.test/alj/2016/0.pdf" in urls          # never dropped
+    assert "https://example.test/dab/2016/0.pdf" in urls          # untouched fallback
+    assert any(u.endswith("/alj-decisions/2016/cr4685.pdf") for u in urls)  # fresh folded in
