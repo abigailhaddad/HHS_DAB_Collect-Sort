@@ -124,18 +124,47 @@ def merge_into_corpus(out_dir: Path, division: str, new_parquet: Path) -> int:
     return new.num_rows
 
 
-def push_to_hf(out_dir: Path) -> None:
+def push_to_hf(out_dir: Path, attempts: int = 4) -> None:
+    """Push every file in one commit, retrying on network errors.
+
+    Used to be one upload_file per file. On 2026-10-24 and 2026-10-28 the
+    commit POST for alj.parquet hit httpx.ReadTimeout *after* HF had already
+    committed it, so the run died with alj.parquet published and slices,
+    manifests and README not -- a half-updated dataset, and no site deploy.
+    One commit makes the push all-or-nothing; on a timeout we check whether
+    the head moved to our commit before retrying, so a commit that landed
+    server-side isn't treated as a failure (or pushed twice)."""
     import os
-    from huggingface_hub import HfApi
+    import time
+    import httpx
+    from huggingface_hub import CommitOperationAdd, HfApi
     api = HfApi(token=os.environ["HF_TOKEN"])
-    for name in HF_FILES:
-        path = out_dir / name
-        if not path.exists():
-            continue
-        api.upload_file(path_or_fileobj=str(path), path_in_repo=name,
-                        repo_id=HF_REPO, repo_type="dataset",
-                        commit_message="Daily update: new decisions")
-        print(f"pushed {name} to {HF_REPO}", flush=True)
+    names = [n for n in HF_FILES if (out_dir / n).exists()]
+    ops = [CommitOperationAdd(path_in_repo=n, path_or_fileobj=str(out_dir / n))
+           for n in names]
+    message = "Daily update: new decisions"
+
+    def head() -> tuple[str, str]:
+        c = api.list_repo_commits(HF_REPO, repo_type="dataset")[0]
+        return c.commit_id, c.title
+
+    before, _ = head()
+    for attempt in range(1, attempts + 1):
+        try:
+            api.create_commit(repo_id=HF_REPO, repo_type="dataset",
+                              operations=ops, commit_message=message)
+            break
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            time.sleep(10 * attempt)
+            sha, title = head()
+            if sha != before and title == message:
+                print(f"push timed out ({exc!r}) but commit {sha[:8]} landed",
+                      flush=True)
+                break
+            if attempt == attempts:
+                raise
+            print(f"push attempt {attempt} failed ({exc!r}); retrying", flush=True)
+    print(f"pushed {', '.join(names)} to {HF_REPO}", flush=True)
 
 
 def main() -> int:
