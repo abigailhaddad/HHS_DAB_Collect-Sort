@@ -81,9 +81,13 @@ The corpora are not committed; `.gitignore` keeps `*.jsonl` and `*.parquet` out.
   page and a redirect to the section landing page all return 200 with a full
   HTML skeleton and nothing in it. `verify.py` gives every fetched file a named
   verdict so that checking is a command rather than a habit.
-- **Completeness is measured, and it is not total.** Every index listing that
-  carries an identifiable decision number is in the corpus; the listings whose
-  captions have no parseable number sit outside the check entirely.
+- **Completeness is measured, and it is not total.** The listings whose
+  captions have no parseable number sit outside the check entirely, and the
+  Board's index itself has errors -- duplicate numbers, crossed links, typos --
+  that once let the audit count missing decisions as present (see
+  LIMITATIONS.md, "Correction, 2026-11-01"). Known errors are corrected in
+  `errata.json`, with evidence; `repair_corpus.py` applies them and checks every
+  decision's number against the citation it opens with.
 - **Category labels and dispositions are heuristics.** No precision or recall is
   claimed; there is no hand-labelled sample to compute one from. Dispositions
   are read only from unambiguous first-person phrasing in a decision's own

@@ -2,7 +2,7 @@
 fold it into the corpus, push to Hugging Face, and rebuild the site's data file.
 
 Shells out to this repo's own scripts in the same order the manual run this
-week used -- audit_completeness -> fetch_missing -> fetch_via_browser ->
+week used -- repair_corpus -> audit_completeness -> fetch_missing -> fetch_via_browser ->
 extract -> build_dataset -> merge -> link_corpora -> build_slices ->
 build_manifests -> build_card -> push -> build_web_data -- rather than
 reimplementing any of them, so a change to one of those stays in one place.
@@ -114,6 +114,14 @@ def merge_into_corpus(out_dir: Path, division: str, new_parquet: Path) -> int:
     existing_ids = set(existing.column("id").to_pylist())
     keep_mask = [i not in existing_ids for i in new.column("id").to_pylist()]
     if not all(keep_mask):
+        # A decision the audit called missing that the corpus already holds:
+        # the index's listing points at some other decision's page. Before
+        # 2026-11-01 this was silent, and TB8312 and TB5804 were "fetched"
+        # and dropped here every day for weeks. Say so, and say where to fix it.
+        dropped = [i for i, k in zip(new.column("id").to_pylist(), keep_mask) if not k]
+        warn(f"{division}: {len(dropped)} fetched decision(s) were already in the "
+             f"corpus ({', '.join(dropped[:5])}) -- the index likely links them to "
+             f"another decision's page; check them and add to errata.json")
         new = new.filter(pa.array(keep_mask))
     if new.num_rows == 0:
         return 0
@@ -122,6 +130,32 @@ def merge_into_corpus(out_dir: Path, division: str, new_parquet: Path) -> int:
     pq.write_table(merged, out_dir / f"{division}.parquet",
                    compression="zstd", compression_level=9)
     return new.num_rows
+
+
+def warn(message: str) -> None:
+    """Print it, and put it on the workflow run's summary page, where someone
+    will see it without reading a 2,000-line log."""
+    import os
+    print(f"WARNING: {message}", flush=True)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as f:
+            f.write(f"- :warning: {message}\n")
+
+
+def repair(out_dir: Path, tmp_dir: Path) -> bool:
+    """Run repair_corpus.py over the corpus. True if it rewrote anything.
+    Anything it could not settle on its own is surfaced with warn()."""
+    report = tmp_dir / "repair_report.json"
+    run(["python3", "repair_corpus.py", *(str(out_dir / f"{c}.parquet") for c in CORPORA),
+         "--report", str(report)])
+    reports = json.loads(report.read_text(encoding="utf-8"))
+    for rep in reports:
+        for key in ("duplicates_unresolved", "needs_review"):
+            for item in rep[key]:
+                warn(f"{rep['corpus']} {key.replace('_', ' ')}: {item}")
+    return any(r["errata_applied"] or r["renumbered_from_filename"]
+               or r["duplicates_dropped"] for r in reports)
 
 
 def push_to_hf(out_dir: Path, attempts: int = 4) -> None:
@@ -181,17 +215,20 @@ def main() -> int:
 
     args.tmp_dir.mkdir(parents=True, exist_ok=True)
     ensure_corpus(args.out_dir)
+    # Before the audit: a row the corpus holds under no number (or a wrong one)
+    # is a decision the audit would call missing and fetch again.
+    repaired = repair(args.out_dir, args.tmp_dir)
 
     missing_path = args.tmp_dir / "missing.jsonl"
     run(["python3", "audit_completeness.py", str(args.index),
          str(args.out_dir / "dab.parquet"), str(args.out_dir / "alj.parquet"),
          "--missing-out", str(missing_path)])
 
+    total_new = 0
     if not missing_path.exists() or missing_path.stat().st_size == 0:
         print("\nno missing decisions -- corpus already matches the index")
     else:
         by_division = split_missing(missing_path, args.tmp_dir)
-        total_new = 0
         for division, path in by_division.items():
             new_parquet = fetch_and_build(division, path, args.tmp_dir, args.index,
                                           args.launch_browser, args.delay)
@@ -200,17 +237,20 @@ def main() -> int:
             n = merge_into_corpus(args.out_dir, division, new_parquet)
             print(f"{division}: merged {n} new decision(s) into the corpus")
             total_new += n
-
         if total_new:
-            run(["python3", "link_corpora.py", str(args.out_dir / "dab.parquet"),
-                 str(args.out_dir / "alj.parquet")])
-            corpus_files = [str(args.out_dir / f"{c}.parquet") for c in CORPORA]
-            council = args.out_dir / "council.parquet"
-            if council.exists():
-                corpus_files.append(str(council))
-            run(["python3", "build_slices.py", *corpus_files,
-                 "-o", str(args.out_dir / "slices.parquet")])
-            run(["python3", "build_manifests.py", "--dir", str(args.out_dir)])
+            # The newly merged rows get the same checks as the rest.
+            repaired = repair(args.out_dir, args.tmp_dir) or repaired
+
+    if total_new or repaired:
+        run(["python3", "link_corpora.py", str(args.out_dir / "dab.parquet"),
+             str(args.out_dir / "alj.parquet")])
+        corpus_files = [str(args.out_dir / f"{c}.parquet") for c in CORPORA]
+        council = args.out_dir / "council.parquet"
+        if council.exists():
+            corpus_files.append(str(council))
+        run(["python3", "build_slices.py", *corpus_files,
+             "-o", str(args.out_dir / "slices.parquet")])
+        run(["python3", "build_manifests.py", "--dir", str(args.out_dir)])
 
     run(["python3", "build_card.py", "--dir", str(args.out_dir), "--index", str(args.index)])
 

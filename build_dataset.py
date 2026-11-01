@@ -63,9 +63,13 @@ def index_lookup(index: Path | None) -> dict[str, dict]:
     # fetch_missing saves it ("2024_alj-cr5002"), or as it is named at the
     # source ("alj-cr5002"). Keying on only the first silently fails to join
     # for any corpus assembled by other means, which is most of this one.
+    import errata
+
     lookup: dict[str, dict] = {}
     seen_numbers: set[str] = set()
-    for r in jsonl.read(index):
+    # With errata.json applied, or a decision fetched from a mislinked or
+    # mistyped listing is built under the wrong number all over again.
+    for r in errata.apply_to_index(list(jsonl.read(index)))[0]:
         tail = r["url"].rstrip("/").split("/")[-1].split("?", 1)[0].split("#", 1)[0]
         if tail.lower().startswith("index."):
             tail = r["url"].rstrip("/").split("/")[-2] + ".html"

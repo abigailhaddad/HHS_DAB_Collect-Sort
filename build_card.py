@@ -211,7 +211,11 @@ duckdb.sql(\"\"\"
   the source filename, then the header. The header alone agreed with the index
   only 64% of the time — OCR mangles the label in the older scans, and a failed
   parse picks up a citation to a different decision. `decision_no_source`
-  records which was used.
+  records which was used; `errata` marks a number corrected by hand where the
+  Board's index is wrong (crossed links, duplicate numbers, typos), each with
+  its evidence in the repository's `errata.json`. Every number is also checked
+  against the citation a decision opens with, where it has one, and a
+  disagreement is reported rather than silently changed.
 
 ## Provenance
 
