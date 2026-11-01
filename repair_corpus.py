@@ -107,12 +107,17 @@ def repair(table: pa.Table, corpus: str, fixes: dict | None = None) -> tuple[pa.
     fixes = fixes if fixes is not None else errata.load()
     overrides = errata.corpus_overrides(corpus, fixes)
     rows = table.to_pylist()
-    report = {"corpus": corpus, "errata_applied": [], "renumbered_from_filename": [],
+    # A row errata.json says is not a decision of its own (the Board's page
+    # served another decision's text under its number).
+    dropped_by_errata = [r["id"] for r in rows if overrides.get(r["id"], {}).get("drop")]
+    rows = [r for r in rows if not overrides.get(r["id"], {}).get("drop")]
+    report = {"corpus": corpus, "errata_dropped": dropped_by_errata,
+              "errata_applied": [], "renumbered_from_filename": [],
               "duplicates_dropped": [], "duplicates_unresolved": [], "needs_review": []}
 
     for r in rows:
         o = overrides.get(r["id"])
-        if o and (r["decision_no"] != o["decision_no"]
+        if o and "decision_no" in o and (r["decision_no"] != o["decision_no"]
                   or r["decision_no_source"] != "errata"
                   or ("source_url" in o and r["source_url"] != o["source_url"])):
             report["errata_applied"].append(
@@ -177,7 +182,7 @@ def repair(table: pa.Table, corpus: str, fixes: dict | None = None) -> tuple[pa.
 
 def changed(report: dict) -> bool:
     return bool(report["errata_applied"] or report["renumbered_from_filename"]
-                or report["duplicates_dropped"])
+                or report["duplicates_dropped"] or report.get("errata_dropped"))
 
 
 def main() -> int:
@@ -193,6 +198,7 @@ def main() -> int:
         new, rep = repair(t, corpus)
         reports.append(rep)
         print(f"{corpus}: {len(rep['errata_applied'])} errata applied, "
+              f"{len(rep['errata_dropped'])} rows dropped by errata, "
               f"{len(rep['renumbered_from_filename'])} renumbered from filename, "
               f"{len(rep['duplicates_dropped'])} duplicate rows dropped "
               f"({t.num_rows} -> {new.num_rows}), "

@@ -159,3 +159,15 @@ def test_audit_matches_a_twice_listed_number_on_year(tmp_path):
     assert "lists 1 number(s) more than once" in r.stdout
     years = [json.loads(l)["year"] for l in missing.read_text().splitlines()]
     assert years == [1988]
+
+
+def test_an_erratum_can_drop_a_row_that_is_another_decision():
+    # The Board's dab1417 page serves DAB 1416; the row fetched from it is a copy.
+    fixes = {"index": [], "corpus": [{"corpus": "alj", "id": "1993_dab1417", "drop": True}]}
+    t = table([row("1993_dab1417", "1417", "Anthony Accaputo, Jr., DAB No. 1416 (1993)",
+                   dt.date(1993, 6, 3), url="https://example/dab1417.html", source="index"),
+               row("1993.06.03DAB1416 Anthony Accaputo", "1416",
+                   "Anthony Accaputo, Jr., DAB No. 1416 (1993)", dt.date(1993, 6, 3))])
+    new, rep = repair_corpus.repair(t, "alj", fixes)
+    assert [r["decision_no"] for r in new.to_pylist()] == ["1416"]
+    assert rep["errata_dropped"] == ["1993_dab1417"] and repair_corpus.changed(rep)

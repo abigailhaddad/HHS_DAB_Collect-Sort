@@ -85,7 +85,7 @@ def corpus_overrides(corpus: str, errata: dict | None = None) -> dict[str, dict]
     """{row id: fields to set} for one corpus."""
     errata = errata if errata is not None else load()
     return {e["id"]: {k: v for k, v in e.items()
-                      if k in ("decision_no", "source_url")}
+                      if k in ("decision_no", "source_url", "drop")}
             for e in errata["corpus"] if e["corpus"] == corpus}
 
 

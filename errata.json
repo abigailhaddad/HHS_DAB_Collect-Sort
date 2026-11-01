@@ -41,7 +41,7 @@
       "url_contains": "alj-cr5524",
       "set_decision_no": "CR5524",
       "found": "2026-11-01",
-      "evidence": "The 2020 ALJ index captions 'Cardiac Imaging Associates A Medical Corporation v. CMS' (2020-02-03) as CR5224 but links it to alj-cr5524; CR5224 is Beacon Ambulance Service, Inc. v. CMS (2018-12-12, alj-cr5224). The decision itself was not in the corpus to check; repair_corpus.py's number check reports it if its own citation disagrees once fetched."
+      "evidence": "The 2020 ALJ index captions 'Cardiac Imaging Associates A Medical Corporation v. CMS' (2020-02-03) as CR5224 but links it to alj-cr5524; CR5224 is Beacon Ambulance Service, Inc. v. CMS (2018-12-12). Checked live 2026-11-01: the alj-cr5524 page opens 'Cardiac Imaging Associates A Medical Corporation, DAB CR5524 (2020)' and reads 'Decision No. CR5524 February 3, 2020'."
     },
     {
       "division": "dab",
@@ -50,7 +50,7 @@
       "url_contains": "dab871.html",
       "set_decision_no": "871",
       "found": "2026-11-01",
-      "evidence": "The 1987 index captions 'National Health Plan, Inc.' (1987-05-27) as DAB171 but links it to dab871.html; DAB 171 is Montana Department of Social and Rehabilitation Services (1981), and 1987 decisions are numbered in the 800s-900s (DAB 924 is 1987-12-11). Not in the corpus to check; the number check reports it if its own citation disagrees once fetched."
+      "evidence": "The 1987 index captions 'National Health Plan, Inc.' (1987-05-27) as DAB171 but links it to dab871.html; DAB 171 is Montana Department of Social and Rehabilitation Services (1981). Checked 2026-11-01 (Internet Archive copy of dab871.html): 'National Health Plan, Inc., DAB No. 871 (1987) ... Decision No. 871 DATE: May 27, 1987'."
     },
     {
       "division": "alj",
@@ -59,7 +59,16 @@
       "url_contains": "2014/cr3031.pdf",
       "skip": true,
       "found": "2026-11-01",
-      "evidence": "Listed in both the 2013 and the 2014 ALJ index with the identical caption '2014.03.28 BOARD DISMISSAL, 2013.12.12 CR3031 Peter Victor Ayika v. The Inspector General'; the corpus holds CR3031 from the 2013 listing. The 2014 PDF could not be opened from here (hhs.gov returns 403 to scripts), so whether it differs from the 2013 one is unverified."
+      "evidence": "Listed in both the 2013 and the 2014 ALJ index with the identical caption '2014.03.28 BOARD DISMISSAL, 2013.12.12 CR3031 Peter Victor Ayika v. The Inspector General'. Checked 2026-11-01: the two PDFs (2013/cr3031.pdf, 2014/cr3031.pdf, Internet Archive copies) are byte-identical (SHA-1 4df080bc...). The corpus holds CR3031 from the 2013 listing."
+    },
+    {
+      "division": "dab",
+      "decision_no": "1417",
+      "year": 1993,
+      "url_contains": "dab1417",
+      "skip": true,
+      "found": "2026-11-01",
+      "evidence": "The 1993 index lists DAB1416 and DAB1417 with the identical caption 'Anthony Accaputo, Jr. vs. The Inspector General' (1993-06-03). Checked live 2026-11-01: hhs.gov's dab1417 page serves DAB 1416 word for word ('Decision No. 1416', Docket No. C-92-001). The Board has not published a DAB 1417 at that address; there is nothing to fetch under it."
     }
   ],
   "corpus": [
@@ -91,6 +100,13 @@
       "decision_no": "924",
       "found": "2026-11-01",
       "evidence": "The decision opens 'Washington State Department of Social and Health Services, DAB No. 924 (1987)' and its source file is dab924.html. DAB 942 is the 1988 Florida decision."
+    },
+    {
+      "corpus": "dab",
+      "id": "1993_dab1417",
+      "drop": true,
+      "found": "2026-11-01",
+      "evidence": "Fetched from the dab1417 page, which serves DAB 1416 (see the index entry for 1417). Its text opens 'Anthony Accaputo, Jr., DAB No. 1416 (1993)'; the corpus already holds DAB 1416."
     }
   ],
   "number_check_ok": [
@@ -99,6 +115,12 @@
       "id": "1984_dab506",
       "found": "2026-11-01",
       "evidence": "The citation line reads 'DAB No. 596 (1984)', but the same document's header reads 'GAB Decision 506 ... January 31, 1984', matching the index (1984.01.31 DAB506 New York State Department of Social Services). DAB 596 is Virginia Department of Social Services (1984-11-21). The Board's typo; the stored 506 is right."
+    },
+    {
+      "corpus": "dab",
+      "id": "1984_dab540",
+      "found": "2026-11-01",
+      "evidence": "The decision reads 'New York State Department of Social Services, DAB No. 540A (1984) GAB Decision 540 Docket No. 84-115 July 10, 1984'. The index lists it twice, as DAB540 and DAB540A (unnumbered by the parser); checked 2026-11-01 (Internet Archive copies), the two pages are identical apart from the caption line. One decision; the stored 540 matches its header."
     }
   ]
 }

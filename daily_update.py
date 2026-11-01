@@ -155,7 +155,7 @@ def repair(out_dir: Path, tmp_dir: Path) -> bool:
             for item in rep[key]:
                 warn(f"{rep['corpus']} {key.replace('_', ' ')}: {item}")
     return any(r["errata_applied"] or r["renumbered_from_filename"]
-               or r["duplicates_dropped"] for r in reports)
+               or r["duplicates_dropped"] or r.get("errata_dropped") for r in reports)
 
 
 def push_to_hf(out_dir: Path, attempts: int = 4) -> None:

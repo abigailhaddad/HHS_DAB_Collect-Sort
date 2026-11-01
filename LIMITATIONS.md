@@ -95,9 +95,11 @@ twice -- tobacco decisions from the original corpus that an older parse gave no
 number, which the audit therefore re-fetched -- so the tobacco_products slice
 read 986 where it is 735. Corrections are in `errata.json`, each with its
 evidence, and `repair_corpus.py` applies them, removes duplicates and checks
-every number against the citation the decision opens with. Two disputes it
-raises are open: the "1417" file opens as DAB No. 1416 (the Board appears to
-have posted 1416 twice, and 1417 may be missing), and DAB 540's text cites 540A.
+every number against the citation the decision opens with. Checked against
+hhs.gov and the Internet Archive the same day: the Board's DAB 1417 page serves
+DAB 1416 word for word (the corpus's "1417" row was that copy, and is dropped;
+no DAB 1417 is published at its address), and DAB 540 and 540A are one decision
+listed twice.
 
 The remaining 323 index listings carry no parseable decision number and sit
 outside the check entirely. They are mostly reconsideration decisions and
