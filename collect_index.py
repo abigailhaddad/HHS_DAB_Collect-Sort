@@ -178,6 +178,13 @@ def main() -> int:
     cache: dict[str, list[dict]] = {}
     if args.cache and args.cache.exists():
         for r in jsonl.read(args.cache):
+            # Number cached rows with today's parser, not whatever parsed
+            # them when they were first cached: the past years always come
+            # from here, so a parser fix otherwise never reached them (the
+            # reconsideration rulings of 1992-2005, metadata.py). Checked
+            # 2026-11-01: on the committed cache this changes exactly those
+            # seven rows and no others.
+            r["decision_no"] = decision_no_from_caption(r["caption"], r["url"])
             cache.setdefault(f"{r['division']}:{r['year']}", []).append(r)
 
     by_key: dict[str, list[dict]] = {}

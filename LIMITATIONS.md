@@ -83,6 +83,24 @@ gives an identifiable number to: 8,897 of 8,897. `audit_completeness.py` runs
 that diff against the publisher's own list, rather than against a guess about
 which decision numbers ought to exist.
 
+**Correction, 2026-11-01: that count was overstated.** The audit matched on the
+number alone, and the Board's index has errors that make one decision's number
+stand in for another's: two decisions listed as DAB942, two as TB8762, six
+rulings on reconsideration numbered as the decision they reconsider, and links
+crossed or mistyped (TB8312 to CR6510's page, CR5524 typed CR5224, DAB 871 typed
+171). Re-run with those resolved, ten listed decisions were not in the
+corpus, among them DAB 942 (1988), DAB 871 (1987), CR5524 and all six of those
+rulings; the daily run fetches them from now on. The ALJ file also held 251 decisions
+twice -- tobacco decisions from the original corpus that an older parse gave no
+number, which the audit therefore re-fetched -- so the tobacco_products slice
+read 986 where it is 735. Corrections are in `errata.json`, each with its
+evidence, and `repair_corpus.py` applies them, removes duplicates and checks
+every number against the citation the decision opens with. Checked against
+hhs.gov and the Internet Archive the same day: the Board's DAB 1417 page serves
+DAB 1416 word for word (the corpus's "1417" row was that copy, and is dropped;
+no DAB 1417 is published at its address), and DAB 540 and 540A are one decision
+listed twice.
+
 The remaining 323 index listings carry no parseable decision number and sit
 outside the check entirely. They are mostly reconsideration decisions and
 rulings with irregular captions.

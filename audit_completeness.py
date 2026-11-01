@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
+import errata
+
 
 def norm(no: str | None) -> str | None:
     """Canonical decision number.
@@ -36,12 +38,16 @@ def norm(no: str | None) -> str | None:
 
 
 def load_index(path: Path) -> dict[str, list[dict]]:
+    """The index by division, with errata.json's corrections applied: the Board
+    has swapped two decisions' links and listed two decisions under one number
+    (see errata.py), and either one made this audit wrong."""
+    rows = [json.loads(line) for line in path.open(encoding="utf-8") if line.strip()]
+    rows, fixed = errata.apply_to_index(rows)
+    if fixed:
+        print(f"errata.json: corrected {fixed} index entr{'y' if fixed == 1 else 'ies'}")
     out = collections.defaultdict(list)
-    for line in path.open(encoding="utf-8"):
-        line = line.strip()
-        if line:
-            r = json.loads(line)
-            out[r["division"]].append(r)
+    for r in rows:
+        out[r["division"]].append(r)
     return out
 
 
@@ -52,16 +58,28 @@ def main() -> int:
     ap.add_argument("--missing-out", type=Path, default=Path("missing.jsonl"))
     args = ap.parse_args()
 
-    held = {}
+    held, held_by_year = {}, {}
     for p in args.parquets:
-        t = pq.read_table(p, columns=["decision_no", "corpus"])
+        t = pq.read_table(p, columns=["decision_no", "corpus", "year"])
         corpus = t.column("corpus").to_pylist()[0] if t.num_rows else p.stem
-        held[corpus] = {norm(x) for x in t.column("decision_no").to_pylist() if x}
+        numbers = t.column("decision_no").to_pylist()
+        held[corpus] = {norm(x) for x in numbers if x}
+        held_by_year[corpus] = {(norm(x), y) for x, y in
+                                zip(numbers, t.column("year").to_pylist()) if x}
 
     index = load_index(args.index)
     missing_rows = []
     for division, rows in sorted(index.items()):
         have = held.get(division, set())
+        # A number the Board lists more than once can't say which decision it
+        # means, so those are matched on number and year. Matched on number
+        # alone, the 1987 decision filed under 942 made the 1988 DAB 942 look
+        # present when the corpus had no copy of it.
+        listed = collections.Counter(norm(r["decision_no"]) for r in rows if r["decision_no"])
+        shared = {n for n, c in listed.items() if n and c > 1}
+        if shared:
+            print(f"\n{division}: the index lists {len(shared)} number(s) more than "
+                  f"once, matched on number and year: {', '.join(sorted(shared))}")
         by_year = collections.defaultdict(lambda: [0, 0])
         unnumbered = 0
         for r in rows:
@@ -70,7 +88,9 @@ def main() -> int:
                 unnumbered += 1
                 continue
             by_year[r["year"]][0] += 1
-            if n in have:
+            found = ((n, r["year"]) in held_by_year.get(division, set())
+                     if n in shared else n in have)
+            if found:
                 by_year[r["year"]][1] += 1
             else:
                 missing_rows.append(r)

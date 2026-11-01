@@ -196,6 +196,21 @@ FILENAME_RULING = re.compile(
 # the corpus, none of them counted as a gap because a decision with no number
 # does not show up as a decision that failed to match one.
 RULING_TYPED_AS_DAB = re.compile(r"DAB\s*((?:19|20)\d\d-\d{1,3})\b", re.IGNORECASE)
+# The Board's index captions a ruling on a request to reconsider or reopen one
+# of its decisions as "RUL Ruling on Request for Reconsideration (DAB1285)",
+# and the number in it is the decision being reconsidered. Read plainly it came
+# back as 1285, which is the decision itself, so the index listed the number
+# twice and the audit took the decision's presence for the ruling's: on
+# 2026-11-01 all six such rulings (1285, 1598, 1676, 1761, 1773, 1926) were
+# missing from the corpus and none was reported. The corpus already numbers a
+# decision on reconsideration with an R (108R, 1109R, 1833R); so does this.
+RECONSIDERATION_RULING = re.compile(
+    r"\bRUL\b.*?\bRuling\s+on\b.*?(?:Reconsider|Reopen)\w*.*?\bDAB\s*-?0*(\d{1,5})\b",
+    re.IGNORECASE)
+# "RULNCD Ruling No. 1 Pancreas Transplants": the Board's rulings on national
+# coverage determination complaints have their own sequence, which read
+# plainly collided with DAB No. 1 (1974).
+NCD_RULING = re.compile(r"\bRULNCD\b.*?\bRuling\s+No\.?\s*(\d{1,4})\b", re.IGNORECASE)
 FILENAME_NO = re.compile(
     r"(DAB|CR|TB|Decision\s+No\.?|No\.)[\s;,._-]*0*(\d{1,5}R?)\b", re.IGNORECASE)
 
@@ -219,6 +234,12 @@ def decision_no_from_text(fragment: str) -> str | None:
     """
     if not fragment:
         return None
+    m = RECONSIDERATION_RULING.search(fragment)
+    if m:
+        return m.group(1) + "R"
+    m = NCD_RULING.search(fragment)
+    if m:
+        return "RULINGNCD" + m.group(1)
     m = FILENAME_RULING.search(fragment)
     if m:
         return "RULING" + m.group(1)

@@ -203,6 +203,31 @@ check("text_quality: one character per page fails",
       extract.text_quality("x" * 12, 12)[0], False)
 
 
+# --- Rulings on reconsideration ----------------------------------------------
+# The index captions a ruling on reconsidering a decision with that decision's
+# number in it. Read plainly, all six such rulings (1992-2004) and NCD Ruling
+# No. 1 took the number of a decision the corpus already held, so the audit
+# counted them present; none was in the corpus (2026-11-01).
+RULING_CASES = [
+    ("1992.03.20 RUL Ruling on Request for Reconsideration (DAB1285) - California "
+     "Department of Health Services", "1285R"),
+    ("1997.01.08 RUL Ruling on Request for Reconsideration of DAB1598 Home "
+     "Education Livelihood Program, Inc.", "1598R"),
+    ("2001.06.13 RUL Ruling on Request for Reconsideraton (DAB1773) - New Jersey "
+     "Department of Human Services", "1773R"),   # sic, the Board's typo
+    ("2004.08.16 RUL Ruling on CMS Motion to Reopent the Board's Decision (DAB1926) "
+     "vs. Centers for Medicare & Medicaid Services", "1926R"),
+    ("2005.07.01 RULNCD Ruling No. 1 Pancreas Transplants # 35-82", "RULINGNCD1"),
+    # ...and the decisions themselves are unchanged.
+    ("1991.12.19 DAB1285 California Department of Health Services", "1285"),
+    ("1974.03.07 DAB001 University of Texas Medical School at San Antonio", "1"),
+    ("2007.11.20RUL2008-2 Action for a Better Community, Inc.", "RULING2008-2"),
+]
+for caption, want in RULING_CASES:
+    check(f"decision_no_from_text: {caption[:50]}",
+          metadata.decision_no_from_text(caption), want)
+
+
 if failures:
     print(f"{len(failures)} FAILED\n")
     for f in failures:
