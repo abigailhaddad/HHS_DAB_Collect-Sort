@@ -69,6 +69,16 @@
       "skip": true,
       "found": "2026-11-01",
       "evidence": "The 1993 index lists DAB1416 and DAB1417 with the identical caption 'Anthony Accaputo, Jr. vs. The Inspector General' (1993-06-03). Checked live 2026-11-01: hhs.gov's dab1417 page serves DAB 1416 word for word ('Decision No. 1416', Docket No. C-92-001). The Board has not published a DAB 1417 at that address; there is nothing to fetch under it."
+    },
+    {
+      "division": "dab",
+      "decision_no": "RULING2027-1",
+      "year": 2026,
+      "url_contains": "board-ruling-2027-1",
+      "skip": true,
+      "cache_only": true,
+      "found": "2026-11-02",
+      "evidence": "Brenham Healthcare Center v. CMS, Ruling No. 2027-1 (Oct. 13, 2026), first listed in the 2026 Board decisions and moved by 2026-11-02 to the 2026 ALJ decisions (see the dab corpus entry 2026_board-ruling-2027-1). The old board-ruling-2027-1 URL returns Page Not Found, but index_cache.jsonl never drops rows, so this listing comes back on any day dab:2026 falls back to the cache. Skipped so it isn't fetched as a missing Board decision."
     }
   ],
   "corpus": [

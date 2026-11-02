@@ -82,6 +82,22 @@ def test_a_stale_erratum_says_so(capsys):
     assert "matched 0 rows" in capsys.readouterr().out
 
 
+CACHE_ONLY = {"index": [{"division": "dab", "decision_no": "RULING2027-1", "year": 2026,
+                         "url_contains": "board-ruling-2027-1", "skip": True,
+                         "cache_only": True}], "corpus": [], "number_check_ok": []}
+MOVED = {"division": "dab", "year": 2026, "decision_no": "RULING2027-1",
+         "url": "https://example/board-decisions/2026/board-ruling-2027-1/index.html"}
+
+
+def test_cache_only_erratum_is_quiet_when_absent_and_skips_when_present(capsys):
+    assert errata.apply_to_index([], CACHE_ONLY) == ([], 0)
+    assert capsys.readouterr().out == ""
+    out, fixed = errata.apply_to_index([dict(MOVED)], CACHE_ONLY)
+    assert out == [] and fixed == 1
+    errata.apply_to_index([dict(MOVED), dict(MOVED)], CACHE_ONLY)
+    assert "matched 2 rows" in capsys.readouterr().out
+
+
 def test_repair_applies_errata_renumbers_and_drops_the_older_copy():
     t = table([
         row("2024.07.22, CR6510, Complete Care at Arbors v. CMS", "CR6510", VAPOR,

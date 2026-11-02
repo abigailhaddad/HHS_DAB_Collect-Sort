@@ -51,6 +51,11 @@ def apply_to_index(rows: list[dict], errata: dict | None = None) -> tuple[list[d
     listed twice). Each entry must match exactly one
     row; one that matches none means the Board fixed its index, or the entry is
     stale, and it says so rather than passing silently.
+
+    The exception is a `cache_only` entry: a listing the Board has since removed
+    but index_cache.jsonl still holds (the cache never drops rows), so it only
+    reaches the index on a day that year falls back to the cache. Matching 0
+    rows is that entry's normal day; more than 1 still says so.
     """
     errata = errata if errata is not None else load()
     out, fixed = [], 0
@@ -74,7 +79,7 @@ def apply_to_index(rows: list[dict], errata: dict | None = None) -> tuple[list[d
         if row is not None:
             out.append(row)
     for e, n in zip(errata["index"], used):
-        if n != 1:
+        if n != 1 and not (n == 0 and e.get("cache_only")):
             print(f"errata.json: index entry {e['division']} {e['decision_no']} "
                   f"({e['url_contains']}) matched {n} rows, expected 1 -- has the "
                   f"Board corrected its index?", flush=True)
