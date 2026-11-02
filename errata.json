@@ -107,6 +107,13 @@
       "drop": true,
       "found": "2026-11-01",
       "evidence": "Fetched from the dab1417 page, which serves DAB 1416 (see the index entry for 1417). Its text opens 'Anthony Accaputo, Jr., DAB No. 1416 (1993)'; the corpus already holds DAB 1416."
+    },
+    {
+      "corpus": "dab",
+      "id": "2026_board-ruling-2027-1",
+      "drop": true,
+      "found": "2026-11-02",
+      "evidence": "Brenham Healthcare Center v. CMS, Ruling No. 2027-1 (Oct. 13, 2026) was first listed in the 2026 Board decisions as RUL2027-1 at board-decisions/2026/board-ruling-2027-1. By 2026-11-02 the Board had moved it to the 2026 ALJ decisions as 'ALJ Ruling No. 2027-1' at alj-decisions/2026/alj-ruling-2027-1, and the old Board URL returns Page Not Found. The ALJ page reads 'Civil Remedies Division ... Docket No. C-26-16, Ruling No. 2027-1, October 13, 2026, ORDER OF DISMISSAL', and the corpus row's own tribunal field already says Civil Remedies Division. The ALJ copy is fetched into alj by the daily update."
     }
   ],
   "number_check_ok": [
