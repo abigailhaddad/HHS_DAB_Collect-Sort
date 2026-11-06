@@ -101,6 +101,14 @@ def main() -> int:
     unfetched = set(meta.get("unfetched", []))
     total = sum(now.values())
 
+    if total == 0:
+        # An index with nothing in it is a broken collector, never a quiet day.
+        # With every year marked "unfetched" it would otherwise pass: nothing
+        # counted as lost, nothing counted at all.
+        print("the index has no decisions in it -- the collector found nothing",
+              file=sys.stderr)
+        return 1
+
     if args.update and meta.get("cdp") and not args.allow_cdp:
         # The exact mistake this module's own docstring warns about: a count
         # only a hand-started Chrome can reach becomes the daily target, and
@@ -137,6 +145,11 @@ def main() -> int:
         return 0
 
     baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
+    if baseline and all(k in unfetched for k in baseline):
+        # Every year we have a count for was skipped, so nothing was checked.
+        print("every division-year in the baseline was unfetched this run, so "
+              "nothing was compared", file=sys.stderr)
+        return 1
     lost, gained = compare(baseline, now, unfetched)
 
     print(f"{total} decisions listed across {len(now)} division-years "

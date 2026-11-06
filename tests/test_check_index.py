@@ -101,3 +101,33 @@ def test_the_run_summary_names_what_changed(tmp_path, monkeypatch):
 def test_the_summary_is_a_no_op_outside_actions(monkeypatch):
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     check_index.summary({}, {}, [], [], set())   # must not raise
+
+
+def _run(tmp_path, monkeypatch, rows, baseline, meta=None):
+    idx = tmp_path / "index.jsonl"
+    idx.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    base = tmp_path / "baseline.json"
+    base.write_text(json.dumps(baseline))
+    if meta is not None:
+        (tmp_path / "index.meta.json").write_text(json.dumps(meta))
+    monkeypatch.setattr("sys.argv", ["check_index.py", str(idx), "--baseline", str(base)])
+    return check_index.main()
+
+
+def test_an_empty_index_fails_the_run(tmp_path, monkeypatch):
+    # Even when every year is marked unfetched, which would otherwise pass.
+    code = _run(tmp_path, monkeypatch, [], {"alj:2020": 5},
+                meta={"unfetched": ["alj:2020"]})
+    assert code == 1
+
+
+def test_a_run_that_could_not_fetch_any_baseline_year_fails(tmp_path, monkeypatch):
+    rows = [{"division": "dab", "year": 2030, "decision_no": "1"}]
+    code = _run(tmp_path, monkeypatch, rows, {"alj:2020": 5},
+                meta={"unfetched": ["alj:2020"]})
+    assert code == 1
+
+
+def test_a_normal_run_with_a_gain_still_passes(tmp_path, monkeypatch):
+    rows = [{"division": "alj", "year": 2020, "decision_no": str(i)} for i in range(6)]
+    assert _run(tmp_path, monkeypatch, rows, {"alj:2020": 5}) == 0
