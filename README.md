@@ -12,6 +12,8 @@ which collected the original corpus and wrote the first version of these scripts
 Two tribunals, in separate files: the Appellate Division and the Grant Appeals
 Board before it, from 1974; and the Civil Remedies Division ALJs, from 1985.
 
+Taking this over? Start with [HANDOFF.md](./HANDOFF.md).
+
 Counts are not repeated here, because they change every time the collector runs
 and this file does not. `audit_completeness.py` prints the current ones against
 the Board's index, and `manifest_{corpus}.json` carries them per slice.

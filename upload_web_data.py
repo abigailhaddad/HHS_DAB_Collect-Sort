@@ -19,7 +19,9 @@ import boto3
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 
-BUCKET = "hhs-dab-data"
+import config
+
+BUCKET = config.R2_BUCKET
 KEY = "decisions.parquet"
 
 

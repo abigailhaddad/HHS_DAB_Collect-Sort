@@ -26,9 +26,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 import build_dataset
+import config
 
 CORPORA = ("alj", "dab")
-HF_REPO = "abigailhaddad/hhs-dab-decisions"
+HF_REPO = config.HF_REPO
 HF_FILES = ["alj.parquet", "dab.parquet", "council.parquet", "slices.parquet",
             "manifest_alj.json", "manifest_dab.json", "manifest_council.json",
             "README.md"]
