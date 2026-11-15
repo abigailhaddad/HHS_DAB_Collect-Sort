@@ -74,6 +74,7 @@ def render(out_dir: Path, index_path: Path | None) -> str:
     if sp.exists():
         s = pq.read_table(sp, columns=["corpus", "id", "category"])
         pairs = set(zip(s.column("corpus").to_pylist(), s.column("category").to_pylist()))
+        slice_corpora = sorted(set(s.column("corpus").to_pylist()))
         members = collections.Counter(zip(s.column("corpus").to_pylist(),
                                           s.column("id").to_pylist()))
         slice_line = (
@@ -82,8 +83,9 @@ def render(out_dir: Path, index_path: Path | None) -> str:
         slices_note = (
             f"{len(members):,} of {total:,} decisions ({pct(len(members), total)}) land in "
             f"at least one slice and {sum(1 for v in members.values() if v > 1):,} in more "
-            f"than one, out of {len(categories.CATEGORIES) * 2} possible category/corpus "
-            f"pairs.")
+            f"than one, out of {len(categories.CATEGORIES) * len(slice_corpora)} possible "
+            f"category/corpus pairs ({len(categories.CATEGORIES)} categories x "
+            f"{len(slice_corpora)} corpora).")
     else:
         slices_note = "No slice table was built."
 
@@ -93,7 +95,9 @@ def render(out_dir: Path, index_path: Path | None) -> str:
     if slice_line:
         rows_md += "\n" + slice_line
 
-    complete = (f"of the {listed:,} listings on its year-by-year index pages, all "
+    # "all" only when it is all: the 2026-11-13 card said "all 9,852 of the 9,853".
+    complete = (f"of the {listed:,} listings on its year-by-year index pages, "
+                f"{'all ' if found == numbered else ''}"
                 f"{found:,} of the {numbered:,} that carry an identifiable decision "
                 f"number are here; the other {listed - numbered:,} sit outside the check"
                 ) if listed else "not measured in this build"
@@ -162,8 +166,8 @@ self-determination contracts.
 
 | column | notes |
 |---|---|
-| `id`, `corpus` | source filename stem; `dab` or `alj` |
-| `decision_no`, `decision_no_source` | `2740`, `CR4685`, `CR10R`, `RULING2013-2`; and which of index / filename / header it came from |
+| `id`, `corpus` | source filename stem; `dab`, `alj` or `council` |
+| `decision_no`, `decision_no_source` | `2740`, `CR4685`, `CR10R`, `RULING2013-2`; and which source it came from: `index`, `filename`, `text` (the header) or `errata` (hand-corrected); empty in `council.parquet` |
 | `docket_nos` | a decision can carry several |
 | `decision_date`, `year` | from the text; null rather than wrong |
 | `tribunal`, `respondent` | which division; who the appeal ran against |
@@ -175,6 +179,8 @@ self-determination contracts.
 | `provider_ids` | `CCN:`, `NPI:`, `PTAN:`, `CLIA:` — joins to CMS data ({stats['alj']['provider_ids']} of ALJ) |
 | `source_url` | where it was collected from |
 | `had_web_chrome`, `text_layer_ok`, `clean_guard_tripped` | extraction flags |
+| `num_pages`, `num_chars` | pages in the source file; characters in `text` |
+| `filename_year_disagrees` | the decision date's year differs from the year in the file name |
 | `text` | the decision, website furniture stripped |
 
 ## Quick start
