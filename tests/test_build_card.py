@@ -69,3 +69,28 @@ def test_a_missing_index_does_not_fake_a_completeness_claim(built):
     card = build_card.render(d, d / "nope.jsonl")
     assert "not measured in this build" in card
     assert "identifiable decision number are here" not in card
+
+
+def test_completeness_does_not_say_all_when_one_is_missing(built):
+    # 2026-11-13 card: "all 9,852 of the 9,853".
+    d, idx = built
+    with idx.open("a") as f:
+        f.write(json.dumps({"division": "dab", "year": 2022, "decision_no": "9999"}) + "\n")
+    card = build_card.render(d, idx)
+    assert "3 of the 4 that carry an identifiable decision number" in card
+    assert "all 3 of the 4" not in card
+
+
+def test_possible_slice_pairs_count_every_corpus_in_the_slice_table(built):
+    # 2026-11-13 card: "77 non-empty slices" but "out of 76 possible pairs";
+    # slices.parquet covers dab, alj and council, and the code multiplied by 2.
+    import categories
+    d, idx = built
+    rows = [("dab", "dab-0"), ("alj", "alj-0"), ("council", "council-0")]
+    cat = next(iter(categories.CATEGORIES))
+    cat = cat if isinstance(cat, str) else getattr(cat, "name", str(cat))
+    pq.write_table(pa.table({"corpus": [r[0] for r in rows], "id": [r[1] for r in rows],
+                             "category": [cat] * 3}), d / "slices.parquet")
+    card = build_card.render(d, idx)
+    n = len(categories.CATEGORIES)
+    assert f"out of {n * 3:,} possible" in card
