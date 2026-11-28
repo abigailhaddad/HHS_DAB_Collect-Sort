@@ -168,11 +168,13 @@ def push_to_hf(out_dir: Path, attempts: int = 4) -> None:
     manifests and README not -- a half-updated dataset, and no site deploy.
     One commit makes the push all-or-nothing; on a timeout we check whether
     the head moved to our commit before retrying, so a commit that landed
-    server-side isn't treated as a failure (or pushed twice)."""
+    server-side isn't treated as a failure (or pushed twice). An HTTP 429 or 5xx
+    from Hugging Face is retried the same way; any other HTTP error is raised."""
     import os
     import time
     import httpx
     from huggingface_hub import CommitOperationAdd, HfApi
+    from huggingface_hub.errors import HfHubHTTPError
     api = HfApi(token=os.environ["HF_TOKEN"])
     names = [n for n in HF_FILES if (out_dir / n).exists()]
     ops = [CommitOperationAdd(path_in_repo=n, path_or_fileobj=str(out_dir / n))
@@ -189,7 +191,10 @@ def push_to_hf(out_dir: Path, attempts: int = 4) -> None:
             api.create_commit(repo_id=HF_REPO, repo_type="dataset",
                               operations=ops, commit_message=message)
             break
-        except (httpx.TimeoutException, httpx.TransportError) as exc:
+        except (httpx.TimeoutException, httpx.TransportError, HfHubHTTPError) as exc:
+            if isinstance(exc, HfHubHTTPError) and getattr(exc.response, "status_code", None) \
+                    not in (429, 500, 502, 503, 504):
+                raise
             time.sleep(10 * attempt)
             sha, title = head()
             if sha != before and title == message:
@@ -200,6 +205,28 @@ def push_to_hf(out_dir: Path, attempts: int = 4) -> None:
                 raise
             print(f"push attempt {attempt} failed ({exc!r}); retrying", flush=True)
     print(f"pushed {', '.join(names)} to {HF_REPO}", flush=True)
+
+
+CORPUS_FILES = ("alj.parquet", "dab.parquet", "council.parquet")
+MAX_SHRINK = 0.01  # the corpus only grows; repair_corpus drops a few duplicates at most
+
+
+def row_counts(out_dir: Path) -> dict[str, int]:
+    return {n: pq.read_metadata(out_dir / n).num_rows
+            for n in CORPUS_FILES if (out_dir / n).exists()}
+
+
+def check_shrink(before: dict[str, int], after: dict[str, int]) -> list[str]:
+    """Problems that should stop the push: a corpus file that went missing, came
+    out empty, or lost more than MAX_SHRINK of the rows it had on Hugging Face."""
+    problems = []
+    for name, n_before in before.items():
+        n_after = after.get(name)
+        if n_after is None:
+            problems.append(f"{name}: was on Hugging Face with {n_before} rows, now missing")
+        elif n_after == 0 or n_after < n_before * (1 - MAX_SHRINK):
+            problems.append(f"{name}: {n_before} -> {n_after} rows")
+    return problems
 
 
 def main() -> int:
@@ -216,6 +243,7 @@ def main() -> int:
 
     args.tmp_dir.mkdir(parents=True, exist_ok=True)
     ensure_corpus(args.out_dir)
+    published_counts = row_counts(args.out_dir)
     # Before the audit: a row the corpus holds under no number (or a wrong one)
     # is a decision the audit would call missing and fetch again.
     repaired = repair(args.out_dir, args.tmp_dir)
@@ -254,6 +282,17 @@ def main() -> int:
         run(["python3", "build_manifests.py", "--dir", str(args.out_dir)])
 
     run(["python3", "build_card.py", "--dir", str(args.out_dir), "--index", str(args.index)])
+
+    import os
+    shrunk = check_shrink(published_counts, row_counts(args.out_dir))
+    if shrunk and not os.environ.get("ALLOW_SHRINK"):
+        for p in shrunk:
+            print(f"STOP: {p}", flush=True)
+        print("Refusing to push a smaller corpus to Hugging Face. If the loss is intended, rerun the "
+              "workflow by hand with allow_shrink checked (or set ALLOW_SHRINK=1 locally).", flush=True)
+        return 1
+    for p in shrunk:
+        warn(f"ALLOW_SHRINK is set, pushing anyway: {p}")
 
     if not args.skip_push:
         push_to_hf(args.out_dir)

@@ -25,6 +25,10 @@ class FakeApi:
         outcome = self.outcomes.pop(0)
         if outcome in ("ok", "landed_then_timeout"):
             self.commits.append(SimpleNamespace(commit_id=f"c{self.calls}", title=commit_message))
+        if isinstance(outcome, int):
+            from huggingface_hub.errors import HfHubHTTPError
+            req = httpx.Request("POST", "https://huggingface.co/api/datasets/x/commit/main")
+            raise HfHubHTTPError(f"HTTP {outcome}", response=httpx.Response(outcome, request=req))
         if outcome != "ok":
             raise httpx.ReadTimeout("The read operation timed out")
 
@@ -71,3 +75,26 @@ def test_all_present_files_go_in_one_commit(monkeypatch, out_dir):
     monkeypatch.setattr(huggingface_hub, "HfApi", lambda token=None: api)
     daily_update.push_to_hf(out_dir)
     assert seen["paths"] == ["alj.parquet", "README.md"]
+
+
+def test_http_503_is_retried(monkeypatch, out_dir):
+    api = run(monkeypatch, out_dir, [503, 429, "ok"])
+    assert api.calls == 3 and len(api.commits) == 2
+
+
+def test_http_403_is_raised_at_once(monkeypatch, out_dir):
+    from huggingface_hub.errors import HfHubHTTPError
+    api = FakeApi(outcomes=[403])
+    monkeypatch.setattr(huggingface_hub, "HfApi", lambda token=None: api)
+    with pytest.raises(HfHubHTTPError):
+        daily_update.push_to_hf(out_dir)
+    assert api.calls == 1
+
+
+def test_check_shrink():
+    before = {"alj.parquet": 6547, "dab.parquet": 3320, "council.parquet": 224}
+    assert daily_update.check_shrink(before, {"alj.parquet": 6550, "dab.parquet": 3320, "council.parquet": 224}) == []
+    assert daily_update.check_shrink(before, {"alj.parquet": 6540, "dab.parquet": 3320, "council.parquet": 224}) == []
+    bad = daily_update.check_shrink(before, {"alj.parquet": 5000, "dab.parquet": 0})
+    assert bad == ["alj.parquet: 6547 -> 5000 rows", "dab.parquet: 3320 -> 0 rows",
+                   "council.parquet: was on Hugging Face with 224 rows, now missing"]
